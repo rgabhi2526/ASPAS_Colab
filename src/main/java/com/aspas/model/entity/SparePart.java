@@ -1,5 +1,8 @@
 package com.aspas.model.entity;
 
+
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -36,6 +39,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"}) 
 public class SparePart {
 
     @Id
@@ -66,6 +70,7 @@ public class SparePart {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rack_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"}) 
     private StorageRack storageRack;
 
     @Column(name = "created_at", nullable = false, updatable = false)

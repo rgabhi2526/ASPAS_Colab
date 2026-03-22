@@ -1,6 +1,8 @@
 package com.aspas.model.entity;
 
 import com.aspas.model.interfaces.Printable;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
@@ -34,6 +36,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"}) 
 public class OrderList implements Printable {
 
     @Id
