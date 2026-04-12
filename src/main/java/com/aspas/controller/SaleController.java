@@ -14,28 +14,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * ================================================================
- * SaleController — REST API for Sales Processing
- * ================================================================
- *
- * UML Traceability:
- *   - Use Case     : UC-01 Process Sale & Update Inventory
- *   - DFD Process  : P1.0 Process Sales & Update Inventory
- *   - Sequence Diagram:
- *       Message #1 : Owner → SC : processSale(partNo, qty)
- *       Message #8 : SC → Owner : success
- *   - Actor        : Shop Owner
- *
- * Endpoint:
- *   POST /api/sales
- *
- * Flow:
- *   Owner sends sale request → Controller → SystemControllerService
- *   → SaleService → (MySQL + MongoDB) → Response
- *
- * ================================================================
- */
 @RestController
 @RequestMapping("/api/sales")
 @RequiredArgsConstructor
@@ -45,30 +23,6 @@ public class SaleController {
 
     private final SystemControllerService systemController;
 
-    /**
-     * Process a sale transaction.
-     *
-     * UML Traceability:
-     *   Sequence Diagram → Message #1: "Owner → SC : processSale(partNo, qty)"
-     *   DFD: Owner → P1.0 (Sales Entry)
-     *
-     * What happens internally:
-     *   1. Looks up part in MySQL (D1 Inventory)
-     *   2. Validates sufficient stock
-     *   3. Deducts quantity from inventory (MySQL)
-     *   4. Creates and logs SalesTransaction (MongoDB D2)
-     *   5. Returns transaction confirmation
-     *
-     * @param request contains partNumber and quantity
-     * @return 201 Created with transaction details
-     *
-     * Example request:
-     *   POST /api/sales
-     *   {
-     *     "partNumber": "SP-BRK-001",
-     *     "quantity": 4
-     *   }
-     */
     @PostMapping
     @Operation(
         summary = "Process a sale",

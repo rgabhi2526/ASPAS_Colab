@@ -17,32 +17,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * ================================================================
- * OrderController — REST API for Order Management
- * ================================================================
- *
- * UML Traceability:
- *   - Use Cases:
- *       UC-03: Generate Daily Orders (base)
- *       UC-02: Calculate JIT Thresholds (<<include>>)
- *       UC-04: Fetch Vendor Address (<<include>>)
- *       UC-06: Check Inventory vs Threshold (<<include>>)
- *   - DFD Process: P3.0 Generate Daily Orders
- *   - Sequence Diagram:
- *       Message #9  : Clock/Owner → SC : triggerEndOfDayOrder()
- *       Message #23 : SC → OL : print()
- *   - Actors: Shop Owner, System Clock
- *
- * Endpoints:
- *   POST /api/orders/generate          → Trigger order generation
- *   GET  /api/orders                   → List all orders
- *   GET  /api/orders/{id}              → Get specific order
- *   GET  /api/orders/{id}/print        → Get print-ready text
- *   GET  /api/orders/by-date/{date}    → Get order by date
- *
- * ================================================================
- */
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
@@ -53,27 +27,6 @@ public class OrderController {
     private final SystemControllerService systemController;
     private final OrderService orderService;
 
-    /**
-     * Trigger end-of-day order generation.
-     *
-     * UML Traceability:
-     *   Sequence Diagram → Message #9: "Clock/Owner → SC : triggerEndOfDayOrder()"
-     *   DFD: Owner → P3.0 (End-of-Day Trigger)
-     *
-     * This triggers the COMPLETE end-of-day process:
-     *   1. <<include>> JIT threshold recalculation (P2.0)
-     *   2. Scan all parts against thresholds
-     *   3. For below-threshold parts: fetch vendor, create order item
-     *   4. Generate and print order list
-     *
-     * Normally triggered by the System Clock scheduler at 11:55 PM,
-     * but can be manually triggered via this endpoint.
-     *
-     * @return generated order list with all items
-     *
-     * Example:
-     *   POST /api/orders/generate
-     */
     @PostMapping("/generate")
     @Operation(
         summary = "Generate end-of-day order",
@@ -95,14 +48,6 @@ public class OrderController {
             .body(response);
     }
 
-    /**
-     * Get all order lists.
-     *
-     * @return list of all orders, newest first
-     *
-     * Example:
-     *   GET /api/orders
-     */
     @GetMapping
     @Operation(
         summary = "List all orders",
@@ -115,15 +60,6 @@ public class OrderController {
         return ResponseEntity.ok(orders);
     }
 
-    /**
-     * Get a specific order by ID.
-     *
-     * @param orderId order database ID
-     * @return the order with all items
-     *
-     * Example:
-     *   GET /api/orders/1
-     */
     @GetMapping("/{orderId}")
     @Operation(
         summary = "Get order by ID",
@@ -142,15 +78,6 @@ public class OrderController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Get an order by date.
-     *
-     * @param date order date (format: yyyy-MM-dd)
-     * @return the order for that date
-     *
-     * Example:
-     *   GET /api/orders/by-date/2026-03-15
-     */
     @GetMapping("/by-date/{date}")
     @Operation(
         summary = "Get order by date",
@@ -169,23 +96,6 @@ public class OrderController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Get print-ready text output for an order.
-     *
-     * UML Traceability:
-     *   Sequence Diagram → Message #23: "SC → OL : print()"
-     *   Interface: Printable.formatOutput()
-     *   Output format: Plain text
-     *
-     * Returns the formatted order list as TEXT (not JSON).
-     * Contains: Part# | Required Qty | Vendor Address
-     *
-     * @param orderId order ID
-     * @return plain text order output
-     *
-     * Example:
-     *   GET /api/orders/1/print
-     */
     @GetMapping(value = "/{orderId}/print", produces = MediaType.TEXT_PLAIN_VALUE)
     @Operation(
         summary = "Get printable order text",

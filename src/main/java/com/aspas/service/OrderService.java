@@ -20,37 +20,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * ================================================================
- * OrderService — DFD Process 3.0: Generate Daily Orders
- * ================================================================
- *
- * UML Traceability:
- *   - DFD Process: P3.0 Generate Daily Orders
- *   - Sequence Diagram: Messages #9, #15 through #23
- *   - Use Cases:
- *       UC-03: Generate Daily Orders (base)
- *       UC-02: Calculate JIT Thresholds (<<include>>)
- *       UC-04: Fetch Vendor Address (<<include>>)
- *       UC-06: Check Inventory vs Threshold (<<include>>)
- *   - Class Diagram: SystemController.triggerEndOfDayOrder()
- *
- * Complete Sequence Diagram flow:
- *   Msg #9  : Clock/Owner → SC : triggerEndOfDayOrder()
- *   Msg #10 : <<include>> JIT calculation (delegated to JITService)
- *   Msg #15 : SC → OL : <<create>> OrderList
- *   Msg #16-22 : LOOP for each SparePart
- *     Msg #17 : SC → SP : checkThreshold()         (<<include>> UC-06)
- *     Msg #18 : SP → SC : isBelowThreshold
- *     OPT [isBelowThreshold == true]:
- *       Msg #19 : SC → V : getVendorAddress()       (<<include>> UC-04)
- *       Msg #20 : V → SC : address
- *       Msg #21 : SC → OI : <<create>> OrderItem
- *       Msg #22 : SC → OL : addOrderItem(item)
- *   Msg #23 : SC → OL : print()
- *
- * ════════════════════════════════════════════════════════════════
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -61,14 +30,6 @@ public class OrderService {
     private final VendorService vendorService;
     private final JITService jitService;
 
-    /**
-     * Generate the end-of-day order list.
-     *
-     * This method implements the COMPLETE sequence for DFD P3.0
-     * including all three <<include>> use cases.
-     *
-     * @return response containing the generated order
-     */
     @Transactional
     public OrderResponseDTO generateDailyOrder() {
 
@@ -76,7 +37,6 @@ public class OrderService {
 
         log.info("═══ PROCESS 3.0: Generating Daily Order for {} ═══", today);
 
-        // Check if order already generated today
         if (orderListRepository.existsByOrderDate(today)) {
             log.warn("  Order already exists for today: {}", today);
             OrderList existing = orderListRepository.findByOrderDate(today)
@@ -84,18 +44,10 @@ public class OrderService {
             return buildOrderResponse(existing);
         }
 
-        // ─────────────────────────────────────────────
-        // SEQUENCE DIAGRAM: Message #10-14
-        // <<include>> Process 2.0: Calculate JIT Thresholds
-        // ─────────────────────────────────────────────
         log.info("  ┌── <<include>> Process 2.0: JIT Threshold Calculation");
         int thresholdsUpdated = jitService.calculateJITThresholds();
         log.info("  └── JIT complete: {} thresholds updated", thresholdsUpdated);
 
-        // ─────────────────────────────────────────────
-        // SEQUENCE DIAGRAM: Message #15
-        // SC → OL : <<create>> OrderList(systemDate)
-        // ─────────────────────────────────────────────
         OrderList orderList = OrderList.builder()
             .orderDate(today)
             .totalItems(0)
@@ -105,44 +57,24 @@ public class OrderService {
 
         log.debug("  Msg #15: OrderList created for date: {}", today);
 
-        // ─────────────────────────────────────────────
-        // SEQUENCE DIAGRAM: Messages #16-22
-        // LOOP: for each SparePart
-        // ─────────────────────────────────────────────
         List<SparePart> allParts = sparePartRepository.findAll();
         log.info("  Scanning {} parts against JIT thresholds...", allParts.size());
 
         for (SparePart part : allParts) {
 
-            // ─────────────────────────────────────────
-            // SEQUENCE DIAGRAM: Message #17-18
-            // <<include>> UC-06: Check Inventory vs Threshold
-            // SC → SP : checkThreshold()
-            // SP → SC : isBelowThreshold
-            // ─────────────────────────────────────────
             boolean belowThreshold = part.checkThreshold();
 
-            // ─────────────────────────────────────────
-            // SEQUENCE DIAGRAM: OPT [isBelowThreshold == true]
-            // ─────────────────────────────────────────
             if (belowThreshold) {
 
                 log.debug("  ⚠ Part {} [{}] BELOW threshold: stock={}, threshold={}",
                     part.getPartNumber(), part.getPartName(),
                     part.getCurrentQuantity(), part.getThresholdValue());
 
-                // Calculate reorder quantity
                 int reorderQty = JITCalculator.calculateReorderQuantity(
                     part.getThresholdValue(),
                     part.getCurrentQuantity()
                 );
 
-                // ─────────────────────────────────────
-                // SEQUENCE DIAGRAM: Message #19-20
-                // <<include>> UC-04: Fetch Vendor Address
-                // SC → V : getVendorAddress()
-                // V → SC : address
-                // ─────────────────────────────────────
                 Vendor vendor;
                 try {
                     vendor = vendorService.getVendorForOrder(part.getPartId());
@@ -154,10 +86,6 @@ public class OrderService {
                 log.debug("    Msg #19-20: Vendor found — {} at {}",
                     vendor.getVendorName(), vendor.getVendorAddress());
 
-                // ─────────────────────────────────────
-                // SEQUENCE DIAGRAM: Message #21
-                // SC → OI : <<create>> OrderItem
-                // ─────────────────────────────────────
                 OrderItem orderItem = OrderItem.builder()
                     .partNumber(part.getPartNumber())
                     .partName(part.getPartName())
@@ -171,26 +99,15 @@ public class OrderService {
                 log.debug("    Msg #21: OrderItem created — Part: {}, Qty: {}, Vendor: {}",
                     part.getPartNumber(), reorderQty, vendor.getVendorName());
 
-                // ─────────────────────────────────────
-                // SEQUENCE DIAGRAM: Message #22
-                // SC → OL : addOrderItem(item)
-                // ─────────────────────────────────────
                 orderList.addOrderItem(orderItem);
                 log.debug("    Msg #22: Item added to order list");
             }
         }
 
-        // ─────────────────────────────────────────────
-        // SEQUENCE DIAGRAM: Message #23
-        // SC → OL : print()
-        // OL → OL : formatOutput()  (Printable interface)
-        // ─────────────────────────────────────────────
         log.info("  Msg #23: Generating print output...");
 
-        // Save first to get orderId for formatting
         orderList = orderListRepository.save(orderList);
 
-        // Generate formatted text using OrderFormatter utility
         String formattedOutput = OrderFormatter.formatOrderList(
             orderList.getOrderId(),
             orderList.getOrderDate(),
@@ -198,12 +115,10 @@ public class OrderService {
             orderList.getCreatedAt()
         );
 
-        // Store formatted text and mark as printed
         orderList.setPrintText(formattedOutput);
         orderList.setIsPrinted(true);
         orderList = orderListRepository.save(orderList);
 
-        // Print to console (backend output)
         System.out.println(formattedOutput);
 
         log.info("═══ PROCESS 3.0 COMPLETE: Order #{} — {} items to reorder ═══",
@@ -212,24 +127,12 @@ public class OrderService {
         return buildOrderResponse(orderList);
     }
 
-    /**
-     * Get an existing order by its ID.
-     *
-     * @param orderId order database ID
-     * @return order response
-     */
     public OrderResponseDTO getOrderById(Long orderId) {
         OrderList order = orderListRepository.findById(orderId)
             .orElseThrow(() -> new OrderNotFoundException(orderId));
         return buildOrderResponse(order);
     }
 
-    /**
-     * Get an order by date.
-     *
-     * @param date order date
-     * @return order response
-     */
     public OrderResponseDTO getOrderByDate(LocalDate date) {
         OrderList order = orderListRepository.findByOrderDate(date)
             .orElseThrow(() -> new OrderNotFoundException(
@@ -238,11 +141,6 @@ public class OrderService {
         return buildOrderResponse(order);
     }
 
-    /**
-     * Get all orders.
-     *
-     * @return list of all order responses
-     */
     public List<OrderResponseDTO> getAllOrders() {
         return orderListRepository.findAllByOrderByOrderDateDesc()
             .stream()
@@ -250,12 +148,6 @@ public class OrderService {
             .collect(Collectors.toList());
     }
 
-    /**
-     * Get the print-ready text for an order.
-     *
-     * @param orderId order ID
-     * @return formatted text string
-     */
     public String getOrderPrintText(Long orderId) {
         OrderList order = orderListRepository.findById(orderId)
             .orElseThrow(() -> new OrderNotFoundException(orderId));
@@ -264,7 +156,6 @@ public class OrderService {
             return order.getPrintText();
         }
 
-        // Regenerate print text if not stored
         String text = OrderFormatter.formatOrderList(
             order.getOrderId(),
             order.getOrderDate(),
@@ -277,9 +168,6 @@ public class OrderService {
         return text;
     }
 
-    /**
-     * Build OrderResponseDTO from OrderList entity.
-     */
     private OrderResponseDTO buildOrderResponse(OrderList order) {
 
         List<OrderResponseDTO.OrderItemDTO> itemDTOs = order.getOrderItems()

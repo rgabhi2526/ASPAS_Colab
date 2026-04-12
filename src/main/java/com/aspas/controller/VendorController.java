@@ -13,28 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
-/**
- * ================================================================
- * VendorController — REST API for Vendor Management
- * ================================================================
- *
- * UML Traceability:
- *   - DFD Store: D3 Vendor Directory
- *   - Class Diagram: Vendor class
- *   - Use Case: UC-04 Fetch Vendor Address (<<include>> for UC-03)
- *   - Sequence Diagram: Message #19-20 "SC → V : getVendorAddress()"
- *
- * Endpoints:
- *   GET    /api/vendors                       → List all vendors
- *   GET    /api/vendors/{id}                  → Get vendor by ID
- *   POST   /api/vendors                       → Add new vendor
- *   PUT    /api/vendors/{id}                  → Update vendor
- *   DELETE /api/vendors/{id}                  → Remove vendor
- *   GET    /api/vendors/search?q=keyword      → Search vendors
- *   GET    /api/vendors/by-part/{partId}      → Vendors for a part
- *
- * ════════════════════════════════════════════════════════════════
- */
 @RestController
 @RequestMapping("/api/vendors")
 @RequiredArgsConstructor
@@ -44,12 +22,6 @@ public class VendorController {
 
     private final VendorService vendorService;
 
-    /**
-     * Get all vendors.
-     *
-     * Example:
-     *   GET /api/vendors
-     */
     @GetMapping
     @Operation(summary = "List all vendors", description = "Returns complete vendor directory")
     public ResponseEntity<List<Vendor>> getAllVendors() {
@@ -57,16 +29,6 @@ public class VendorController {
         return ResponseEntity.ok(vendorService.getAllVendors());
     }
 
-    /**
-     * Get a vendor by ID.
-     *
-     * UML Traceability:
-     *   Sequence Diagram → Message #19-20 "SC → V : getVendorAddress()"
-     *   UC-04: Fetch Vendor Address
-     *
-     * Example:
-     *   GET /api/vendors/1
-     */
     @GetMapping("/{vendorId}")
     @Operation(
         summary = "Get vendor by ID",
@@ -83,18 +45,6 @@ public class VendorController {
         return ResponseEntity.ok(vendorService.getVendorById(vendorId));
     }
 
-    /**
-     * Add a new vendor.
-     *
-     * Example:
-     *   POST /api/vendors
-     *   {
-     *     "vendorName": "New Auto Parts Ltd",
-     *     "vendorAddress": "456 Industrial Zone, Mumbai, India",
-     *     "contactNumber": "+91-22-12345678",
-     *     "email": "orders@newautoparts.com"
-     *   }
-     */
     @PostMapping
     @Operation(summary = "Add new vendor", description = "Creates a new vendor in the directory")
     @ApiResponses({
@@ -109,21 +59,6 @@ public class VendorController {
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
-    /**
-     * Update a vendor.
-     *
-     * UML Traceability:
-     *   Class Diagram → Vendor.updateContactInfo()
-     *
-     * Example:
-     *   PUT /api/vendors/1
-     *   {
-     *     "vendorName": "Bosch Auto Parts (Updated)",
-     *     "vendorAddress": "New Address 789",
-     *     "contactNumber": "+49-30-99999",
-     *     "email": "newcontact@bosch.com"
-     *   }
-     */
     @PutMapping("/{vendorId}")
     @Operation(summary = "Update vendor", description = "Updates vendor details and contact info")
     @ApiResponses({
@@ -138,12 +73,6 @@ public class VendorController {
         return ResponseEntity.ok(vendorService.updateVendor(vendorId, updatedVendor));
     }
 
-    /**
-     * Delete a vendor.
-     *
-     * Example:
-     *   DELETE /api/vendors/1
-     */
     @DeleteMapping("/{vendorId}")
     @Operation(summary = "Delete vendor", description = "Removes vendor from directory")
     @ApiResponses({
@@ -158,12 +87,6 @@ public class VendorController {
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * Search vendors by name keyword.
-     *
-     * Example:
-     *   GET /api/vendors/search?q=bosch
-     */
     @GetMapping("/search")
     @Operation(summary = "Search vendors", description = "Case-insensitive keyword search by name")
     public ResponseEntity<List<Vendor>> searchVendors(
@@ -173,16 +96,6 @@ public class VendorController {
         return ResponseEntity.ok(vendorService.searchVendors(keyword));
     }
 
-    /**
-     * Get vendors that supply a specific part.
-     *
-     * UML Traceability:
-     *   Class Diagram → SparePart *──1..* Vendor (supplied by)
-     *   Uses the part_vendor many-to-many join table
-     *
-     * Example:
-     *   GET /api/vendors/by-part/1
-     */
     @GetMapping("/by-part/{partId}")
     @Operation(
         summary = "Vendors for a part",

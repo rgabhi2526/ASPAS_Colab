@@ -1,8 +1,19 @@
-
+-- ==============================================================
+-- ASPAS - MySQL Schema (managed via phpMyAdmin)
+-- ==============================================================
+-- HOW TO USE:
+--   Option A: Run this script manually in phpMyAdmin
+--   Option B: Set spring.sql.init.mode=always in application.properties
+--             (Spring Boot runs it on startup automatically)
+-- ==============================================================
 
 CREATE DATABASE IF NOT EXISTS aspas_db;
 USE aspas_db;
 
+-- =========================
+-- TABLE: storage_racks
+-- Maps to: Class Diagram → StorageRack
+-- =========================
 CREATE TABLE IF NOT EXISTS storage_racks (
     rack_id        INT AUTO_INCREMENT PRIMARY KEY,
     rack_number    INT NOT NULL UNIQUE,
@@ -13,7 +24,10 @@ CREATE TABLE IF NOT EXISTS storage_racks (
 ) ENGINE=InnoDB;
 
 
-
+-- =========================
+-- TABLE: vendors
+-- Maps to: Class Diagram → Vendor
+-- Maps to: DFD → D3 Vendor Directory
 -- =========================
 CREATE TABLE IF NOT EXISTS vendors (
     vendor_id       BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -26,6 +40,11 @@ CREATE TABLE IF NOT EXISTS vendors (
 ) ENGINE=InnoDB;
 
 
+-- =========================
+-- TABLE: spare_parts
+-- Maps to: Class Diagram → SparePart
+-- Maps to: DFD → D1 Inventory File
+-- =========================
 CREATE TABLE IF NOT EXISTS spare_parts (
     part_id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     part_number     VARCHAR(50) NOT NULL UNIQUE,
@@ -44,7 +63,12 @@ CREATE TABLE IF NOT EXISTS spare_parts (
 ) ENGINE=InnoDB;
 
 
-
+-- =========================
+-- JOIN TABLE: part_vendor
+-- Maps to: Class Diagram → SparePart *──1..* Vendor
+-- A part can be supplied by multiple vendors
+-- A vendor can supply multiple parts
+-- =========================
 CREATE TABLE IF NOT EXISTS part_vendor (
     part_id     BIGINT NOT NULL,
     vendor_id   BIGINT NOT NULL,
@@ -62,6 +86,11 @@ CREATE TABLE IF NOT EXISTS part_vendor (
 ) ENGINE=InnoDB;
 
 
+-- =========================
+-- TABLE: order_lists
+-- Maps to: Class Diagram → OrderList
+-- Composition parent (items cascade-delete with list)
+-- =========================
 CREATE TABLE IF NOT EXISTS order_lists (
     order_id    BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_date  DATE NOT NULL,
@@ -72,6 +101,12 @@ CREATE TABLE IF NOT EXISTS order_lists (
 ) ENGINE=InnoDB;
 
 
+-- =========================
+-- TABLE: order_items
+-- Maps to: Class Diagram → OrderItem
+-- Composition child → ON DELETE CASCADE
+-- Each row = one line on the printed order
+-- =========================
 CREATE TABLE IF NOT EXISTS order_items (
     item_id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_id        BIGINT NOT NULL,
@@ -95,6 +130,11 @@ CREATE TABLE IF NOT EXISTS order_items (
 ) ENGINE=InnoDB;
 
 
+-- =========================
+-- SEED DATA (Optional - for testing)
+-- =========================
+
+-- Sample Racks
 INSERT IGNORE INTO storage_racks (rack_number, wall_location, max_capacity)
 VALUES
     (1, 'North Wall - Section A', 50),
@@ -112,7 +152,7 @@ VALUES
     ('Mann+Hummel', '45 Filter Street, Ludwigsburg, Germany', '+49-7141-980', 'parts@mann-hummel.com'),
     ('Brembo SpA', 'Via Brembo 25, Bergamo, Italy', '+39-035-605111', 'orders@brembo.it');
 
-
+-- Sample Spare Parts
 INSERT IGNORE INTO spare_parts (part_number, part_name, current_qty, threshold_val, unit_price, size_category, rack_id)
 VALUES
     ('SP-BRK-001', 'Brake Pad - Front (Ceramic)', 25, 10, 450.00, 'SMALL', 1),
@@ -126,6 +166,7 @@ VALUES
     ('SP-CLT-001', 'Clutch Plate Kit', 10, 5, 3200.00, 'MEDIUM', 4),
     ('SP-COL-001', 'Coolant Hose Set', 20, 10, 650.00, 'SMALL', 5);
 
+-- Link Parts to Vendors (Many-to-Many)
 INSERT IGNORE INTO part_vendor (part_id, vendor_id, is_primary)
 VALUES
     (1, 5, TRUE),    -- Brake Pad → Brembo (primary)
