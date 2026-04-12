@@ -1,30 +1,20 @@
 package com.aspas.service;
 
 import com.aspas.exception.PartNotFoundException;
+import com.aspas.model.dto.SparePartRequestDTO;
 import com.aspas.model.entity.SparePart;
 import com.aspas.model.entity.StorageRack;
+import com.aspas.model.entity.Vendor;
 import com.aspas.repository.jpa.SparePartRepository;
 import com.aspas.repository.jpa.StorageRackRepository;
+import com.aspas.repository.jpa.VendorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.ArrayList;
 import java.util.List;
 
-/**
- * ================================================================
- * InventoryService — Inventory CRUD & Management
- * ================================================================
- *
- * UML Traceability:
- *   - DFD Store: D1 Inventory File
- *   - Class Diagram: SparePart, StorageRack entities
- *   - Provides CRUD operations on the Inventory
- *
- * Manages spare parts and storage racks.
- *
- * ================================================================
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -32,121 +22,56 @@ public class InventoryService {
 
     private final SparePartRepository sparePartRepository;
     private final StorageRackRepository storageRackRepository;
+    private final VendorRepository vendorRepository;
 
-    // ══════════════════════════════════════════
-    //  SPARE PARTS CRUD
-    // ══════════════════════════════════════════
-
-    /**
-     * Get all spare parts.
-     *
-     * @return all parts
-     */
     public List<SparePart> getAllParts() {
         log.debug("Fetching all spare parts");
         return sparePartRepository.findAll();
     }
 
-    /**
-     * Get a spare part by its part number.
-     *
-     * UML Traceability:
-     *   Sequence Diagram → Message #2-3 "SC → SP : getPartDetails()"
-     *
-     * @param partNumber business key
-     * @return the spare part
-     * @throws PartNotFoundException if not found
-     */
     public SparePart getPartByNumber(String partNumber) {
         log.debug("Looking up part: {}", partNumber);
         return sparePartRepository.findByPartNumber(partNumber)
             .orElseThrow(() -> new PartNotFoundException(partNumber));
     }
 
-    /**
-     * Get a spare part by its database ID.
-     *
-     * @param partId database ID
-     * @return the spare part
-     * @throws PartNotFoundException if not found
-     */
     public SparePart getPartById(Long partId) {
         return sparePartRepository.findById(partId)
             .orElseThrow(() -> new PartNotFoundException(partId));
     }
 
-    /**
-     * Add a new spare part to inventory.
-     *
-     * @param part the spare part entity
-     * @return saved entity
-     */
     @Transactional
-    public SparePart addPart(SparePart part) {
-        log.info("Adding new part: {} [{}]", part.getPartNumber(), part.getPartName());
+    public SparePart addPart(SparePartRequestDTO dto) {
+        log.info("Adding new part: {} [{}]", dto.getPartNumber(), dto.getPartName());
 
-        if (sparePartRepository.existsByPartNumber(part.getPartNumber())) {
+        if (sparePartRepository.existsByPartNumber(dto.getPartNumber())) {
             throw new IllegalArgumentException(
-                "Part number already exists: " + part.getPartNumber()
+                "Part number already exists: " + dto.getPartNumber()
             );
         }
 
-        StorageRack resolved = resolveStorageRack(part.getStorageRack());
-        int qty = part.getCurrentQuantity() != null ? part.getCurrentQuantity() : 0;
-        assertRackHasCapacity(resolved, qty, null);
-        part.setStorageRack(resolved);
+        SparePart part = SparePart.builder()
+            .partNumber(dto.getPartNumber())
+            .partName(dto.getPartName())
+            .currentQuantity(dto.getCurrentQuantity() != null ? dto.getCurrentQuantity() : 0)
+            .thresholdValue(dto.getThresholdValue() != null ? dto.getThresholdValue() : 0)
+            .unitPrice(dto.getUnitPrice())
+            .sizeCategory(dto.getSizeCategory() != null ? dto.getSizeCategory() : "MEDIUM")
+            .build();
+
+        if (dto.getVendorIds() != null && !dto.getVendorIds().isEmpty()) {
+            List<Vendor> vendors = new ArrayList<>();
+            for (Long vendorId : dto.getVendorIds()) {
+                vendors.add(vendorRepository.findById(vendorId)
+                    .orElseThrow(() -> new IllegalArgumentException("Vendor not found: " + vendorId)));
+            }
+            part.setVendors(vendors);
+            log.info("Linked {} vendor(s) to part {}", vendors.size(), dto.getPartNumber());
+        }
+
         return sparePartRepository.save(part);
     }
 
-    /**
-     * Turn JSON stub ({@code storageRack: { rackId }} or {@code { rackNumber }}) into a managed rack entity.
-     */
-    private StorageRack resolveStorageRack(StorageRack stub) {
-        if (stub == null) {
-            return null;
-        }
-        if (stub.getRackId() != null) {
-            return storageRackRepository.findById(stub.getRackId()).orElse(null);
-        }
-        if (stub.getRackNumber() != null) {
-            return storageRackRepository.findByRackNumber(stub.getRackNumber()).orElse(null);
-        }
-        return null;
-    }
-
-    /**
-     * Enforces rack max capacity: sum of {@code currentQuantity} of other parts on the rack
-     * plus this part's assigned quantity must not exceed {@code maxCapacity}.
-     */
-    private void assertRackHasCapacity(StorageRack managedRack, int quantityForThisPart, Long excludePartId) {
-        if (managedRack == null || managedRack.getRackId() == null) {
-            return;
-        }
-        Integer max = managedRack.getMaxCapacity();
-        if (max == null || max <= 0) {
-            return;
-        }
-        Long sumLb = sparePartRepository.sumCurrentQuantityOnRackExcluding(
-            managedRack.getRackId(), excludePartId);
-        int otherQty = sumLb != null ? sumLb.intValue() : 0;
-        if (otherQty + quantityForThisPart > max) {
-            Integer rackNo = managedRack.getRackNumber();
-            throw new IllegalArgumentException(String.format(
-                "Rack full: rack #%s allows %d units; %d already assigned on this rack; "
-                    + "cannot assign %d for this part (would exceed capacity).",
-                rackNo != null ? rackNo : managedRack.getRackId(),
-                max, otherQty, quantityForThisPart
-            ));
-        }
-    }
-
-    /**
-     * Update an existing spare part.
-     *
-     * @param partNumber part to update
-     * @param updatedPart updated data
-     * @return updated entity
-     */
     @Transactional
     public SparePart updatePart(String partNumber, SparePart updatedPart) {
         SparePart existing = getPartByNumber(partNumber);
@@ -184,11 +109,6 @@ public class InventoryService {
         return sparePartRepository.save(existing);
     }
 
-    /**
-     * Delete a spare part from inventory.
-     *
-     * @param partNumber part to delete
-     */
     @Transactional
     public void deletePart(String partNumber) {
         SparePart part = getPartByNumber(partNumber);
@@ -196,70 +116,28 @@ public class InventoryService {
         sparePartRepository.delete(part);
     }
 
-    /**
-     * Search parts by name keyword.
-     *
-     * @param keyword search term
-     * @return matching parts
-     */
     public List<SparePart> searchParts(String keyword) {
         return sparePartRepository.findByPartNameContainingIgnoreCase(keyword);
     }
 
-    /**
-     * Find parts below JIT threshold (needing reorder).
-     *
-     * UML Traceability:
-     *   UC-06: Check Inventory vs Threshold
-     *   Sequence Diagram → Message #17
-     *
-     * @return parts below threshold
-     */
     public List<SparePart> getPartsBelowThreshold() {
         log.debug("Checking parts below JIT threshold");
         return sparePartRepository.findPartsBelowThreshold();
     }
 
-    /**
-     * Find parts stored in a specific rack.
-     *
-     * @param rackNumber physical rack number
-     * @return parts in that rack
-     */
     public List<SparePart> getPartsByRack(Integer rackNumber) {
         return sparePartRepository.findByRackNumber(rackNumber);
     }
 
-    // ══════════════════════════════════════════
-    //  STORAGE RACKS CRUD
-    // ══════════════════════════════════════════
-
-    /**
-     * Get all storage racks.
-     *
-     * @return all racks sorted by number
-     */
     public List<StorageRack> getAllRacks() {
         return storageRackRepository.findAllByOrderByRackNumberAsc();
     }
 
-    /**
-     * Get a rack by its number.
-     *
-     * @param rackNumber physical rack number
-     * @return the rack
-     */
     public StorageRack getRackByNumber(Integer rackNumber) {
         return storageRackRepository.findByRackNumber(rackNumber)
             .orElseThrow(() -> new RuntimeException("Rack not found: " + rackNumber));
     }
 
-    /**
-     * Add a new rack.
-     *
-     * @param rack the rack entity
-     * @return saved entity
-     */
     @Transactional
     public StorageRack addRack(StorageRack rack) {
         log.info("Adding rack #{} at {}", rack.getRackNumber(), rack.getWallLocation());
@@ -273,16 +151,6 @@ public class InventoryService {
         return storageRackRepository.save(rack);
     }
 
-    /**
-     * Assign a part to a specific rack.
-     *
-     * UML Traceability:
-     *   Class Diagram → StorageRack.assignPart()
-     *
-     * @param partNumber part to assign
-     * @param rackNumber target rack
-     * @return updated part
-     */
     @Transactional
     public SparePart assignPartToRack(String partNumber, Integer rackNumber) {
         SparePart part = getPartByNumber(partNumber);

@@ -1,5 +1,6 @@
 package com.aspas.controller;
 
+import com.aspas.model.dto.SparePartRequestDTO;
 import com.aspas.model.entity.SparePart;
 import com.aspas.model.entity.StorageRack;
 import com.aspas.service.InventoryService;
@@ -17,39 +18,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-/**
- * ================================================================
- * InventoryController — REST API for Inventory Management
- * ================================================================
- *
- * UML Traceability:
- *   - DFD Store: D1 Inventory File
- *   - Class Diagram: SparePart, StorageRack entities
- *   - Use Case: UC-06 Check Inventory vs Threshold (supporting)
- *   - Use Case: UC-02 Calculate JIT Thresholds (manual trigger)
- *
- * Endpoints:
- *   PARTS:
- *     GET    /api/parts                   → List all parts
- *     GET    /api/parts/{partNumber}      → Get one part
- *     POST   /api/parts                   → Add new part
- *     PUT    /api/parts/{partNumber}      → Update part
- *     DELETE /api/parts/{partNumber}      → Remove part
- *     GET    /api/parts/search?q=keyword  → Search parts
- *     GET    /api/parts/below-threshold   → Parts needing reorder
- *     GET    /api/parts/by-rack/{rackNo}  → Parts in a rack
- *
- *   JIT:
- *     POST   /api/jit/calculate           → Manual JIT recalculation
- *     GET    /api/jit/thresholds          → View all thresholds
- *
- *   RACKS:
- *     GET    /api/racks                   → List all racks
- *     POST   /api/racks                   → Add new rack
- *     PUT    /api/parts/{partNo}/rack/{rackNo} → Assign part to rack
- *
- * ================================================================
- */
 @RestController
 @RequestMapping("/api")
 @CrossOrigin(origins = "*")
@@ -61,16 +29,6 @@ public class InventoryController {
     private final InventoryService inventoryService;
     private final JITService jitService;
 
-    // ══════════════════════════════════════════
-    //  SPARE PARTS CRUD
-    // ══════════════════════════════════════════
-
-    /**
-     * Get all spare parts.
-     *
-     * Example:
-     *   GET /api/parts
-     */
     @GetMapping("/parts")
     @Operation(summary = "List all spare parts", description = "Returns complete inventory")
     public ResponseEntity<List<SparePart>> getAllParts() {
@@ -78,15 +36,6 @@ public class InventoryController {
         return ResponseEntity.ok(inventoryService.getAllParts());
     }
 
-    /**
-     * Get a spare part by part number.
-     *
-     * UML Traceability:
-     *   Sequence Diagram → Message #2-3 "SC → SP : getPartDetails()"
-     *
-     * Example:
-     *   GET /api/parts/SP-BRK-001
-     */
     @GetMapping("/parts/{partNumber}")
     @Operation(
         summary = "Get part by number",
@@ -103,20 +52,6 @@ public class InventoryController {
         return ResponseEntity.ok(inventoryService.getPartByNumber(partNumber));
     }
 
-    /**
-     * Add a new spare part.
-     *
-     * Example:
-     *   POST /api/parts
-     *   {
-     *     "partNumber": "SP-NEW-001",
-     *     "partName": "New Part",
-     *     "currentQuantity": 20,
-     *     "thresholdValue": 10,
-     *     "unitPrice": 500.00,
-     *     "sizeCategory": "MEDIUM"
-     *   }
-     */
     @PostMapping("/parts")
     @Operation(summary = "Add new spare part", description = "Creates a new part in inventory")
     @ApiResponses({
@@ -124,24 +59,14 @@ public class InventoryController {
         @ApiResponse(responseCode = "400", description = "Validation error, duplicate part number, or rack full")
     })
     public ResponseEntity<SparePart> addPart(
-            @Valid @RequestBody SparePart part
+            @Valid @RequestBody SparePartRequestDTO partRequest
     ) {
-        log.info("API: POST /api/parts — {}", part.getPartNumber());
-        SparePart saved = inventoryService.addPart(part);
+        log.info("API: POST /api/parts — {}", partRequest.getPartNumber());
+        SparePart saved = inventoryService.addPart(partRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
-    /**
-     * Update an existing spare part.
-     *
-     * Example:
-     *   PUT /api/parts/SP-BRK-001
-     *   {
-     *     "partName": "Updated Brake Pad",
-     *     "unitPrice": 475.00,
-     *     "sizeCategory": "SMALL"
-     *   }
-     */
+
     @PutMapping("/parts/{partNumber}")
     @Operation(summary = "Update spare part", description = "Updates part details")
     @ApiResponses({
@@ -157,12 +82,7 @@ public class InventoryController {
         return ResponseEntity.ok(inventoryService.updatePart(partNumber, updatedPart));
     }
 
-    /**
-     * Delete a spare part.
-     *
-     * Example:
-     *   DELETE /api/parts/SP-BRK-001
-     */
+ 
     @DeleteMapping("/parts/{partNumber}")
     @Operation(summary = "Delete spare part", description = "Removes part from inventory")
     @ApiResponses({
@@ -177,12 +97,7 @@ public class InventoryController {
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * Search parts by name keyword.
-     *
-     * Example:
-     *   GET /api/parts/search?q=brake
-     */
+
     @GetMapping("/parts/search")
     @Operation(summary = "Search parts by name", description = "Case-insensitive keyword search")
     public ResponseEntity<List<SparePart>> searchParts(
@@ -192,16 +107,7 @@ public class InventoryController {
         return ResponseEntity.ok(inventoryService.searchParts(keyword));
     }
 
-    /**
-     * Get all parts below JIT threshold (needing reorder).
-     *
-     * UML Traceability:
-     *   Use Case: UC-06 Check Inventory vs Threshold
-     *   Sequence Diagram → Message #17 "SP.checkThreshold()"
-     *
-     * Example:
-     *   GET /api/parts/below-threshold
-     */
+
     @GetMapping("/parts/below-threshold")
     @Operation(
         summary = "Parts below JIT threshold",
@@ -213,12 +119,6 @@ public class InventoryController {
         return ResponseEntity.ok(inventoryService.getPartsBelowThreshold());
     }
 
-    /**
-     * Get parts stored in a specific rack.
-     *
-     * Example:
-     *   GET /api/parts/by-rack/1
-     */
     @GetMapping("/parts/by-rack/{rackNumber}")
     @Operation(summary = "Parts by rack", description = "Returns parts in a specific wall rack")
     public ResponseEntity<List<SparePart>> getPartsByRack(
@@ -228,25 +128,6 @@ public class InventoryController {
         return ResponseEntity.ok(inventoryService.getPartsByRack(rackNumber));
     }
 
-    // ══════════════════════════════════════════
-    //  JIT THRESHOLD MANAGEMENT
-    // ══════════════════════════════════════════
-
-    /**
-     * Manually trigger JIT threshold recalculation.
-     *
-     * UML Traceability:
-     *   Use Case: UC-02 Calculate JIT Thresholds
-     *   DFD Process: P2.0
-     *   Activity Diagram: JIT Logic Execution (complete)
-     *   Sequence Diagram → Message #10-14
-     *
-     * Normally triggered automatically as part of end-of-day order,
-     * but can be manually triggered via this endpoint.
-     *
-     * Example:
-     *   POST /api/jit/calculate
-     */
     @PostMapping("/jit/calculate")
     @Operation(
         summary = "Recalculate JIT thresholds",
@@ -267,12 +148,6 @@ public class InventoryController {
         ));
     }
 
-    /**
-     * View all current JIT thresholds.
-     *
-     * Example:
-     *   GET /api/jit/thresholds
-     */
     @GetMapping("/jit/thresholds")
     @Operation(
         summary = "View all JIT thresholds",
@@ -283,34 +158,12 @@ public class InventoryController {
         return ResponseEntity.ok(jitService.getAllThresholds());
     }
 
-    // ══════════════════════════════════════════
-    //  STORAGE RACKS
-    // ══════════════════════════════════════════
-
-    /**
-     * Get all storage racks.
-     *
-     * Example:
-     *   GET /api/racks
-     */
     @GetMapping("/racks")
     @Operation(summary = "List all racks", description = "Returns all wall-mounted storage racks")
     public ResponseEntity<List<StorageRack>> getAllRacks() {
         log.info("API: GET /api/racks");
         return ResponseEntity.ok(inventoryService.getAllRacks());
     }
-
-    /**
-     * Add a new storage rack.
-     *
-     * Example:
-     *   POST /api/racks
-     *   {
-     *     "rackNumber": 6,
-     *     "wallLocation": "West Wall - Section A",
-     *     "maxCapacity": 80
-     *   }
-     */
     @PostMapping("/racks")
     @Operation(summary = "Add new rack", description = "Creates a new wall-mounted storage rack")
     @ApiResponses({

@@ -1,38 +1,14 @@
 package com.aspas.model.entity;
 
-
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * ================================================================
- * SparePart Entity
- * ================================================================
- * 
- * UML Traceability:
- *   - Class Diagram: SparePart class
- *   - Relationships:
- *     * SparePart *──1 StorageRack (stored in)
- *     * SparePart *──1..* Vendor (supplied by, via part_vendor join table)
- *   - Database: spare_parts table (MySQL)
- *   - DFD Store: D1 Inventory File
- * 
- * Core inventory entity. Tracks:
- *   - Physical stock quantity
- *   - Dynamic JIT threshold (7-day sales average)
- *   - Location (rack number)
- *   - Suppliers (vendors)
- * 
- * Derived Attribute:
- *   - /isBelowThreshold = (currentQuantity < thresholdValue)
- * 
- * ================================================================
- */
 @Entity
 @Table(name = "spare_parts")
 @Data
@@ -70,8 +46,17 @@ public class SparePart {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rack_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"}) 
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private StorageRack storageRack;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "part_vendor",
+        joinColumns = @JoinColumn(name = "part_id"),
+        inverseJoinColumns = @JoinColumn(name = "vendor_id")
+    )
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private List<Vendor> vendors = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -90,39 +75,14 @@ public class SparePart {
         updatedAt = LocalDateTime.now();
     }
 
-    /**
-     * Derived Attribute: /isBelowThreshold
-     * 
-     * UML Traceability: Class Diagram → SparePart /isBelowThreshold
-     * Computed from: currentQuantity < thresholdValue
-     * Never stored, always computed on demand
-     * 
-     * @return true if current stock is below JIT threshold
-     */
     public boolean isBelowThreshold() {
         return currentQuantity < thresholdValue;
     }
 
-    /**
-     * Check if part is below threshold.
-     * 
-     * UML Traceability: Sequence Diagram → Message #17
-     * UC-06: Check Inventory vs Threshold
-     * 
-     * @return true if reorder is needed
-     */
     public boolean checkThreshold() {
         return isBelowThreshold();
     }
 
-    /**
-     * Update stock quantity (for sales).
-     * 
-     * UML Traceability: Sequence Diagram → Message #4-5
-     * UC-01: Process Sale & Update Inventory
-     * 
-     * @param amount amount to deduct (negative for sales)
-     */
     public void updateQuantity(int amount) {
         this.currentQuantity += amount;
         if (this.currentQuantity < 0) {
@@ -130,22 +90,10 @@ public class SparePart {
         }
     }
 
-    /**
-     * Update JIT threshold value.
-     * 
-     * UML Traceability: Sequence Diagram → Message #14
-     * DFD P2.0: Calculate JIT Thresholds
-     * 
-     * @param newThreshold new threshold based on 7-day average
-     */
     public void updateThreshold(int newThreshold) {
         this.thresholdValue = newThreshold;
     }
 
-    /**
-     * Get part details as formatted string.
-     * @return Part information
-     */
     public String getPartDetails() {
         return String.format(
             "Part: %s [%s] | Stock: %d | Threshold: %d | Price: ₹%.2f | Location: %s",
