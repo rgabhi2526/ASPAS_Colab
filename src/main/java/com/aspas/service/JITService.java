@@ -1,5 +1,6 @@
 package com.aspas.service;
 
+import com.aspas.config.BusinessDateBounds;
 import com.aspas.model.entity.SparePart;
 import com.aspas.repository.jpa.SparePartRepository;
 import com.aspas.repository.mongo.SalesTransactionRepository;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -48,6 +50,7 @@ public class JITService {
 
     private final SparePartRepository sparePartRepository;
     private final SalesTransactionRepository salesTransactionRepository;
+    private final BusinessDateBounds businessDateBounds;
 
     /**
      * Calculate and update JIT thresholds for ALL spare parts.
@@ -167,14 +170,18 @@ public class JITService {
             LocalDateTime endDate
     ) {
         try {
+            Date d0 = businessDateBounds.toMongoDate(startDate);
+            Date d1 = businessDateBounds.toMongoDate(endDate);
             List<PartSalesAggregate> result =
                 salesTransactionRepository.aggregateSalesForPart(
-                    partNumber, startDate, endDate
+                    partNumber, d0, d1
                 );
 
             if (result != null && !result.isEmpty()) {
-                Integer totalQty = result.get(0).getTotalQty();
-                return totalQty != null ? totalQty : 0;
+                int totalQty = result.get(0).getTotalQty() != null
+                    ? result.get(0).getTotalQty().intValue()
+                    : 0;
+                return totalQty;
             }
         } catch (Exception e) {
             log.warn("Mongo read failed for part {} (JIT uses 0 sold): {}", partNumber, e.getMessage());

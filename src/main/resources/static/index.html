@@ -2849,9 +2849,10 @@ function renderMonthlyChart(dailyPoints) {
   el.innerHTML = pts.map((dp, i) => {
     const v = (dp && dp.revenue != null ? dp.revenue : 0) || 0;
     const dayNum = dp && dp.day != null ? dp.day : (i + 1);
+    const barH = Math.round((v / maxVal) * 200);
     return `
     <div class="bar-group">
-      <div class="bar" style="height:${Math.round((v/maxVal)*200)}px;background:${v===peak && v>0?'var(--green)':'var(--accent)'}" data-tooltip="Day ${dayNum}: ₹${v.toLocaleString()}"></div>
+      <div class="bar" style="height:${Math.max(barH, 3)}px;background:${v===peak && v>0?'var(--green)':'var(--accent)'}" data-tooltip="Day ${dayNum}: ₹${v.toLocaleString()}"></div>
       <div class="bar-label">${dayNum}</div>
     </div>`;
   }).join('');
@@ -2881,19 +2882,38 @@ function renderTopPartsList(rows) {
   `).join('');
 }
 
-/** Matches backend: revenueAmount or quantitySold × sellingPrice (Mongo sales_transactions). */
+/** Jackson may emit ISO string or numeric array for LocalDateTime. */
+function parseTxnDate(t) {
+  const raw = t && t.transactionDate;
+  if (raw == null) return null;
+  if (typeof raw === 'string') {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (Array.isArray(raw) && raw.length >= 3) {
+    const y = raw[0], mo = raw[1], day = raw[2], hh = raw[3] ?? 0, mi = raw[4] ?? 0, sec = raw[5] ?? 0;
+    return new Date(y, mo - 1, day, hh, mi, sec);
+  }
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Matches backend: revenueAmount or quantitySold × (unitPrice | sellingPrice). */
 function txnLineRevenue(t) {
   if (!t) return 0;
   if (t.revenueAmount != null && t.revenueAmount !== '') return Number(t.revenueAmount) || 0;
-  return (Number(t.quantitySold) || 0) * (Number(t.sellingPrice) || 0);
+  const q = Number(t.quantitySold) || 0;
+  const p = Number(t.unitPrice != null ? t.unitPrice : t.sellingPrice) || 0;
+  return q * p;
 }
 
 function aggregateHourlyFromTxns(transactions) {
   const HOURS = ['09','10','11','12','13','14','15'];
   const buckets = new Array(7).fill(0);
   (transactions || []).forEach(t => {
-    if (!t.transactionDate) return;
-    const h = new Date(t.transactionDate).getHours();
+    const d = parseTxnDate(t);
+    if (!d) return;
+    const h = d.getHours();
     if (h >= 9 && h <= 15) buckets[h - 9] += txnLineRevenue(t);
   });
   return { buckets, HOURS };
@@ -2934,9 +2954,11 @@ async function refreshDashboard() {
   let yestStats = { totalRevenue: 0, transactionCount: 0 };
   try {
     todayStats = await apiGetJson('/api/sales/stats?date=' + todayIso);
+    console.log('[ASPAS] GET /api/sales/stats?date=' + todayIso, todayStats);
   } catch (_) { /* ok */ }
   try {
     yestStats = await apiGetJson('/api/sales/stats?date=' + yestIso);
+    console.log('[ASPAS] GET /api/sales/stats?date=' + yestIso, yestStats);
   } catch (_) { /* ok */ }
   const rev = Number(todayStats.totalRevenue) || 0;
   const dy = Number(yestStats.totalRevenue) || 0;
@@ -2971,14 +2993,20 @@ async function refreshDashboard() {
 
   let txns = [];
   try {
-    txns = await apiGetJson('/api/sales/transactions?date=' + todayIso);
+    txns = await apiGetJson('/api/sales/transactions/recent?limit=5');
+    console.log('[ASPAS] GET /api/sales/transactions/recent?limit=5', txns);
   } catch (_) { txns = []; }
-  txns = (txns || []).slice().sort((a, b) => new Date(b.transactionDate) - new Date(a.transactionDate));
+  txns = (txns || []).slice().sort((a, b) => {
+    const da = parseTxnDate(a), db = parseTxnDate(b);
+    if (!da || !db) return 0;
+    return db - da;
+  });
   const recentEl = document.getElementById('dashboardRecentTxns');
   if (recentEl) {
     const icons = ['🔧','⚙','🛢','⚠','🔩'];
     recentEl.innerHTML = txns.slice(0, 5).map((t, i) => {
-      const tm = t.transactionDate ? new Date(t.transactionDate).toLocaleTimeString('en-IN', { hour12: false }) : '';
+      const d = parseTxnDate(t);
+      const tm = d ? d.toLocaleTimeString('en-IN', { hour12: false }) : '';
       return `
       <div class="activity-item">
         <div class="activity-icon" style="background:var(--green-dim)">${icons[i % icons.length]}</div>
@@ -2988,7 +3016,7 @@ async function refreshDashboard() {
         </div>
         <div class="activity-amount color-green">₹${Math.round(txnLineRevenue(t)).toLocaleString()}</div>
       </div>`;
-    }).join('') || '<div style="padding:16px;color:var(--text3);font-size:12px">No transactions today yet.</div>';
+    }).join('') || '<div style="padding:16px;color:var(--text3);font-size:12px">No recent transactions yet.</div>';
   }
 
   const jitEl = document.getElementById('dashboardJitAlerts');
@@ -3195,8 +3223,13 @@ async function loadTodayTransactions() {
   } catch (_) { txns = []; }
   const tbody = document.getElementById('txnTableBody');
   if (!tbody) return;
-  tbody.innerHTML = (txns || []).slice().sort((a, b) => new Date(b.transactionDate) - new Date(a.transactionDate)).map(t => {
-    const tm = t.transactionDate ? new Date(t.transactionDate).toLocaleTimeString('en-IN', { hour12: false }) : '';
+  tbody.innerHTML = (txns || []).slice().sort((a, b) => {
+    const da = parseTxnDate(a), db = parseTxnDate(b);
+    if (!da || !db) return 0;
+    return db - da;
+  }).map(t => {
+    const d = parseTxnDate(t);
+    const tm = d ? d.toLocaleTimeString('en-IN', { hour12: false }) : '';
     return `<tr>
       <td><span class="text-mono text-xs color-dim">${t.transactionId || ''}</span></td>
       <td><span class="part-num">${t.partNumber || ''}</span> ${t.partName || ''}</td>
@@ -3468,6 +3501,7 @@ async function loadReportsPage() {
   let daily = {};
   try {
     daily = await apiGetJson('/api/reports/daily/' + todayIso);
+    console.log('[ASPAS] GET /api/reports/daily/' + todayIso, daily);
   } catch (_) { daily = {}; }
   lastDailyReport = daily;
 
@@ -3476,6 +3510,7 @@ async function loadReportsPage() {
   let monthly = {};
   try {
     monthly = await apiGetJson(`/api/reports/monthly/${y}/${m}`);
+    console.log('[ASPAS] GET /api/reports/monthly/' + y + '/' + m, monthly);
   } catch (_) { monthly = {}; }
   lastMonthlyReport = monthly;
 
@@ -3497,8 +3532,21 @@ async function loadReportsPage() {
   try {
     txns = await apiGetJson('/api/sales/transactions?date=' + todayIso);
   } catch (_) { txns = []; }
-  const { buckets, HOURS } = aggregateHourlyFromTxns(txns);
-  renderHourlyChart(buckets, HOURS);
+  let hourlyBuckets;
+  let hourLabels;
+  if (Array.isArray(daily.hourlyDataPoints) && daily.hourlyDataPoints.length) {
+    const map = {};
+    daily.hourlyDataPoints.forEach(pt => {
+      if (pt && pt.hour != null) map[Number(pt.hour)] = Number(pt.revenue) || 0;
+    });
+    hourLabels = ['09','10','11','12','13','14','15'];
+    hourlyBuckets = hourLabels.map((_, i) => map[9 + i] || 0);
+  } else {
+    const agg = aggregateHourlyFromTxns(txns);
+    hourlyBuckets = agg.buckets;
+    hourLabels = agg.HOURS;
+  }
+  renderHourlyChart(hourlyBuckets, hourLabels);
   renderTopPartsList((daily.topSellingParts || []).map(tp => ({ partNumber: tp.partNumber, qtySold: tp.qtySold, revenue: tp.revenue })));
 
   const mGrid = document.querySelectorAll('#report-monthly .kpi-grid .kpi-card');

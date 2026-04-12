@@ -41,6 +41,9 @@ public class ReportResponseDTO {
     // For monthly reports: daily data points for graphing
     private List<DailyDataPointDTO> dailyDataPoints;
 
+    /** UC-07: hours 9–15 revenue for hourly bar chart (from live sales_transactions for report date). */
+    private List<HourlyDataPointDTO> hourlyDataPoints;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime generatedAt;
 
@@ -53,6 +56,15 @@ public class ReportResponseDTO {
     @Builder
     public static class DailyDataPointDTO {
         private Integer day;
+        private Double revenue;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class HourlyDataPointDTO {
+        private Integer hour;
         private Double revenue;
     }
 

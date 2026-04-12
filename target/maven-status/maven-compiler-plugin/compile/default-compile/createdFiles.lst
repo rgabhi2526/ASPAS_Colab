@@ -33,8 +33,10 @@ com/aspas/model/entity/StorageRack$StorageRackBuilder.class
 com/aspas/service/SystemControllerService.class
 com/aspas/model/dto/ReportRequestDTO$ReportRequestDTOBuilder.class
 com/aspas/controller/VendorController.class
+com/aspas/model/dto/ReportResponseDTO$HourlyDataPointDTO.class
 com/aspas/model/dto/SalesDayStatsDTO$SalesDayStatsDTOBuilder.class
 com/aspas/model/dto/SaleResponseDTO.class
+com/aspas/config/BusinessDateBounds.class
 com/aspas/service/JITService.class
 com/aspas/repository/mongo/SalesTransactionRepository$DailyTotalAggregate.class
 com/aspas/model/document/MonthlyGraphReportDoc$DailyDataPoint$DailyDataPointBuilder.class
@@ -63,6 +65,7 @@ com/aspas/model/entity/SparePart$SparePartBuilder.class
 com/aspas/controller/InventoryController.class
 com/aspas/repository/jpa/OrderListRepository.class
 com/aspas/model/entity/SparePart.class
+com/aspas/model/dto/ReportResponseDTO$HourlyDataPointDTO$HourlyDataPointDTOBuilder.class
 com/aspas/repository/jpa/StorageRackRepository.class
 com/aspas/model/document/MonthlyGraphReportDoc$DailyDataPoint.class
 com/aspas/AspasApplication.class

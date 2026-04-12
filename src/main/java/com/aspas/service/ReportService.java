@@ -1,11 +1,14 @@
 package com.aspas.service;
 
+import com.aspas.config.BusinessDateBounds;
 import com.aspas.model.document.DailyRevenueReportDoc;
 import com.aspas.model.document.DailyRevenueReportDoc.TopSellingPart;
 import com.aspas.model.document.MonthlyGraphReportDoc;
 import com.aspas.model.document.MonthlyGraphReportDoc.DailyDataPoint;
+import com.aspas.model.document.SalesTransactionDoc;
 import com.aspas.model.dto.ReportResponseDTO;
 import com.aspas.model.dto.ReportResponseDTO.DailyDataPointDTO;
+import com.aspas.model.dto.ReportResponseDTO.HourlyDataPointDTO;
 import com.aspas.model.dto.ReportResponseDTO.TopSellingPartDTO;
 import com.aspas.repository.mongo.DailyRevenueReportRepository;
 import com.aspas.repository.mongo.MonthlyGraphReportRepository;
@@ -15,11 +18,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.YearMonth;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -60,6 +63,7 @@ public class ReportService {
     private final SalesTransactionRepository salesTransactionRepository;
     private final DailyRevenueReportRepository dailyRevenueReportRepository;
     private final MonthlyGraphReportRepository monthlyGraphReportRepository;
+    private final BusinessDateBounds businessDateBounds;
 
     // ══════════════════════════════════════════
     //  UC-07: VIEW DAILY REVENUE LOG (<<extend>>)
@@ -100,22 +104,16 @@ public class ReportService {
         // SEQUENCE DIAGRAM: Message #28
         // R → ST : reads data (from MongoDB D2 Sales Log)
         // ─────────────────────────────────────────────
-        LocalDateTime startOfDay = date.atStartOfDay();
-        LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
+        Date startOfDay = businessDateBounds.startOfCalendarDay(date);
+        Date endOfDay = businessDateBounds.endOfCalendarDay(date);
 
-        // Get daily total revenue
-        List<DailyTotalAggregate> dailyTotals =
-            salesTransactionRepository.aggregateDailyTotal(startOfDay, endOfDay);
-
-        if (dailyTotals != null && !dailyTotals.isEmpty()) {
-            DailyTotalAggregate total = dailyTotals.get(0);
-            report.setDailyTotal(
-                total.getTotalRevenue() != null ? total.getTotalRevenue() : 0.0
-            );
-            report.setTransactionCount(
-                total.getTotalTransactions() != null ? total.getTotalTransactions() : 0
-            );
+        List<SalesTransactionDoc> txs =
+            salesTransactionRepository.findByTransactionDateBetween(startOfDay, endOfDay);
+        if (txs == null) {
+            txs = List.of();
         }
+        report.setDailyTotal(txs.stream().mapToDouble(ReportService::lineRevenue).sum());
+        report.setTransactionCount(txs.size());
 
         // Get top selling parts for the day
         List<TopSellingAggregate> topParts =
@@ -123,10 +121,11 @@ public class ReportService {
 
         if (topParts != null) {
             List<TopSellingPart> topSellingParts = topParts.stream()
+                .filter(Objects::nonNull)
                 .map(tp -> TopSellingPart.builder()
                     .partNumber(tp.getId())
-                    .qtySold(tp.getTotalQty())
-                    .revenue(tp.getTotalRevenue())
+                    .qtySold(tp.getTotalQty() != null ? tp.getTotalQty().intValue() : 0)
+                    .revenue(tp.getTotalRevenue() != null ? tp.getTotalRevenue() : 0.0)
                     .build()
                 )
                 .collect(Collectors.toList());
@@ -188,8 +187,8 @@ public class ReportService {
         // R → ST : reads data (from MongoDB D2 Sales Log)
         // ─────────────────────────────────────────────
         YearMonth yearMonth = YearMonth.of(year, month);
-        LocalDateTime startOfMonth = yearMonth.atDay(1).atStartOfDay();
-        LocalDateTime endOfMonth = yearMonth.atEndOfMonth().atTime(LocalTime.MAX);
+        Date startOfMonth = businessDateBounds.startOfCalendarDay(yearMonth.atDay(1));
+        Date endOfMonth = businessDateBounds.endOfCalendarDay(yearMonth.atEndOfMonth());
 
         // Aggregate daily revenues for the month
         List<DailyRevenueAggregate> dailyAggregates =
@@ -205,9 +204,9 @@ public class ReportService {
                 if (agg == null) {
                     continue;
                 }
-                Integer dayNum = agg.getId();
+                int dayNum = agg.getId() != null ? agg.getId().intValue() : 0;
                 dataPoints.add(DailyDataPoint.builder()
-                    .day(dayNum != null ? dayNum : 0)
+                    .day(dayNum)
                     .revenue(agg.getDailyRevenue() != null ? agg.getDailyRevenue() : 0.0)
                     .build()
                 );
@@ -269,25 +268,44 @@ public class ReportService {
 
     /**
      * Build a ReportResponseDTO from a DailyRevenueReportDoc.
+     * KPIs, top sellers, and hourly buckets are derived from live {@code sales_transactions}
+     * for the report date so the UI stays aligned with MongoDB D2 even if the cached report is stale.
      */
     private ReportResponseDTO buildDailyResponse(DailyRevenueReportDoc doc) {
+        LocalDate date = doc.getReportDate();
+        Date s = businessDateBounds.startOfCalendarDay(date);
+        Date e = businessDateBounds.endOfCalendarDay(date);
+        List<SalesTransactionDoc> txs = salesTransactionRepository.findByTransactionDateBetween(s, e);
+        if (txs == null) {
+            txs = List.of();
+        }
+
+        double totalRev = txs.stream().mapToDouble(ReportService::lineRevenue).sum();
+        int txCount = txs.size();
+
+        List<TopSellingAggregate> topAgg = salesTransactionRepository.aggregateTopSellingParts(s, e);
         List<TopSellingPartDTO> tops = new ArrayList<>();
-        if (doc.getTopSellingParts() != null) {
-            tops = doc.getTopSellingParts().stream()
+        if (topAgg != null) {
+            tops = topAgg.stream()
+                .filter(Objects::nonNull)
                 .map(tp -> TopSellingPartDTO.builder()
-                    .partNumber(tp.getPartNumber())
-                    .qtySold(tp.getQtySold())
-                    .revenue(tp.getRevenue())
+                    .partNumber(tp.getId())
+                    .qtySold(tp.getTotalQty() != null ? tp.getTotalQty().intValue() : 0)
+                    .revenue(tp.getTotalRevenue() != null ? tp.getTotalRevenue() : 0.0)
                     .build())
                 .collect(Collectors.toList());
         }
+
+        List<HourlyDataPointDTO> hourly = buildHourlyFromTransactions(txs);
+
         return ReportResponseDTO.builder()
             .reportId(doc.getReportId())
             .reportType("DAILY")
             .reportDate(doc.getReportDate())
-            .totalRevenue(doc.getDailyTotal())
-            .transactionCount(doc.getTransactionCount())
+            .totalRevenue(totalRev)
+            .transactionCount(txCount)
             .topSellingParts(tops)
+            .hourlyDataPoints(hourly)
             .generatedAt(doc.getGeneratedAt())
             .build();
     }
@@ -309,15 +327,59 @@ public class ReportService {
                 .collect(Collectors.toList());
         }
 
+        double sumPoints = dataPointDTOs.stream()
+            .mapToDouble(d -> d.getRevenue() != null ? d.getRevenue() : 0.0)
+            .sum();
+
+        Double monthlyTotal = doc.getMonthlyTotal();
+        if (monthlyTotal == null || monthlyTotal == 0.0) {
+            monthlyTotal = sumPoints > 0 ? sumPoints : 0.0;
+        }
+
+        Double averageDaily = doc.getAverageDailyRevenue();
+        int n = dataPointDTOs.size();
+        if ((averageDaily == null || averageDaily == 0.0) && n > 0) {
+            averageDaily = sumPoints / n;
+        }
+        if (averageDaily == null) {
+            averageDaily = 0.0;
+        }
+
         return ReportResponseDTO.builder()
             .reportId(doc.getReportId())
             .reportType("MONTHLY")
             .month(doc.getTargetMonth())
             .year(doc.getTargetYear())
-            .totalRevenue(doc.getMonthlyTotal())
-            .averageDailyRevenue(doc.getAverageDailyRevenue())
+            .totalRevenue(monthlyTotal)
+            .averageDailyRevenue(averageDaily)
             .dailyDataPoints(dataPointDTOs)
             .generatedAt(doc.getGeneratedAt())
             .build();
+    }
+
+    private List<HourlyDataPointDTO> buildHourlyFromTransactions(List<SalesTransactionDoc> txs) {
+        double[] byHour = new double[24];
+        if (txs != null) {
+            for (SalesTransactionDoc t : txs) {
+                if (t == null || t.getTransactionDate() == null) {
+                    continue;
+                }
+                ZonedDateTime z = businessDateBounds.toZoned(t.getTransactionDate());
+                byHour[z.getHour()] += lineRevenue(t);
+            }
+        }
+        List<HourlyDataPointDTO> out = new ArrayList<>();
+        for (int h = 9; h <= 15; h++) {
+            out.add(HourlyDataPointDTO.builder().hour(h).revenue(byHour[h]).build());
+        }
+        return out;
+    }
+
+    private static double lineRevenue(SalesTransactionDoc t) {
+        if (t == null) {
+            return 0.0;
+        }
+        Double r = t.getRevenueAmount();
+        return r != null ? r : 0.0;
     }
 }

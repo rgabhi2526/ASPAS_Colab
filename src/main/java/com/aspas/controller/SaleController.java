@@ -70,6 +70,21 @@ public class SaleController {
     }
 
     /**
+     * Latest sales from MongoDB (default 5), for dashboard recent activity.
+     */
+    @GetMapping("/transactions/recent")
+    @Operation(
+        summary = "Recent sales transactions",
+        description = "Returns the newest documents from sales_transactions (default limit 5)"
+    )
+    public ResponseEntity<List<SalesTransactionDoc>> recentTransactions(
+            @RequestParam(required = false, defaultValue = "5") int limit
+    ) {
+        log.info("API: GET /api/sales/transactions/recent?limit={}", limit);
+        return ResponseEntity.ok(systemController.listRecentTransactions(limit));
+    }
+
+    /**
      * Aggregated transaction count and revenue for a day (MongoDB {@code sales_transactions}).
      */
     @GetMapping("/stats")

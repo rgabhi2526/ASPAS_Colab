@@ -1,11 +1,13 @@
 package com.aspas.repository.mongo;
 
 import com.aspas.model.document.SalesTransactionDoc;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.Aggregation;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -121,6 +123,13 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
         LocalDateTime endOfDay
     );
 
+    /**
+     * Same as day-range query using {@link Date} (recommended for timezone-aligned bounds).
+     */
+    @Query("{ 'transactionDate': { $gte: ?0, $lte: ?1 } }")
+    List<SalesTransactionDoc> findByTransactionDateBetween(Date fromInclusive, Date toInclusive);
+
+    List<SalesTransactionDoc> findAllByOrderByTransactionDateDesc(Pageable pageable);
 
     // ══════════════════════════════════════════
     //  AGGREGATION QUERIES (MongoDB Pipeline)
@@ -147,8 +156,8 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
     })
     List<PartSalesAggregate> aggregateSalesForPart(
         String partNumber,
-        LocalDateTime startDate,
-        LocalDateTime endDate
+        Date startDate,
+        Date endDate
     );
 
     /**
@@ -173,8 +182,8 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
         "{ $sort: { '_id': 1 } }"
     })
     List<DailyRevenueAggregate> aggregateDailyRevenueForMonth(
-        LocalDateTime startDate,
-        LocalDateTime endDate
+        Date startDate,
+        Date endDate
     );
 
     /**
@@ -193,8 +202,8 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
         "{ $group: { '_id': null, 'totalRevenue': { $sum: '$_lineRev' }, 'totalTransactions': { $sum: 1 } } }"
     })
     List<DailyTotalAggregate> aggregateDailyTotal(
-        LocalDateTime startOfDay,
-        LocalDateTime endOfDay
+        Date startOfDay,
+        Date endOfDay
     );
 
     /**
@@ -212,8 +221,8 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
         "{ $limit: 10 }"
     })
     List<TopSellingAggregate> aggregateTopSellingParts(
-        LocalDateTime startOfDay,
-        LocalDateTime endOfDay
+        Date startOfDay,
+        Date endOfDay
     );
 
 
@@ -252,7 +261,8 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
      */
     interface PartSalesAggregate {
         String getId();             // partNumber
-        Integer getTotalQty();      // sum of quantitySold
+        /** Mongo $sum often maps as Long */
+        Number getTotalQty();       // sum of quantitySold
         Double getTotalRevenue();   // sum of revenueAmount
     }
 
@@ -261,9 +271,9 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
      * Used by monthly graph report.
      */
     interface DailyRevenueAggregate {
-        Integer getId();                // day of month (1-31)
+        Number getId();                 // day of month (1-31)
         Double getDailyRevenue();       // total revenue for that day
-        Integer getTransactionCount();  // number of transactions
+        Number getTransactionCount();   // number of transactions
     }
 
     /**
@@ -272,7 +282,8 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
      */
     interface DailyTotalAggregate {
         Double getTotalRevenue();       // day's total revenue
-        Integer getTotalTransactions(); // day's total transactions
+        /** Mongo $sum: 1 often maps as Long — use Number for compatibility */
+        Number getTotalTransactions();
     }
 
     /**
@@ -281,7 +292,7 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
     interface TopSellingAggregate {
         String getId();             // partNumber
         String getPartName();       // part name
-        Integer getTotalQty();      // total quantity sold
+        Number getTotalQty();       // total quantity sold
         Double getTotalRevenue();   // total revenue from this part
     }
 }

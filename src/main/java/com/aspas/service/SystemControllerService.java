@@ -82,6 +82,10 @@ public class SystemControllerService {
         return saleService.getSalesStatsForDay(date);
     }
 
+    public List<SalesTransactionDoc> listRecentTransactions(int limit) {
+        return saleService.listRecentTransactions(limit);
+    }
+
     // ══════════════════════════════════════════
     //  P2.0: CALCULATE JIT THRESHOLDS
     // ══════════════════════════════════════════
