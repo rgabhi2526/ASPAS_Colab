@@ -1,13 +1,17 @@
 package com.aspas.service;
 
 import com.aspas.model.dto.OrderResponseDTO;
+import com.aspas.model.dto.SalesDayStatsDTO;
 import com.aspas.model.dto.ReportResponseDTO;
 import com.aspas.model.dto.SaleRequestDTO;
 import com.aspas.model.dto.SaleResponseDTO;
+import com.aspas.model.document.SalesTransactionDoc;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import java.time.LocalDate;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * ================================================================
@@ -70,6 +74,14 @@ public class SystemControllerService {
         return saleService.processSale(request);
     }
 
+    public List<SalesTransactionDoc> listTransactionsForDate(LocalDate date) {
+        return saleService.listTransactionsForDate(date);
+    }
+
+    public SalesDayStatsDTO getSalesStatsForDay(LocalDate date) {
+        return saleService.getSalesStatsForDay(date);
+    }
+
     // ══════════════════════════════════════════
     //  P2.0: CALCULATE JIT THRESHOLDS
     // ══════════════════════════════════════════
@@ -114,9 +126,10 @@ public class SystemControllerService {
      *
      * @return generated order
      */
-    public OrderResponseDTO triggerEndOfDayOrder() {
+    public List<OrderResponseDTO> triggerEndOfDayOrder() {
         log.info("╔══ SystemController: triggerEndOfDayOrder() ══╗");
-        return orderService.generateDailyOrder();
+        List<OrderResponseDTO> orders = orderService.generateDailyOrder();
+        return orders != null ? orders : Collections.emptyList();
     }
 
     // ══════════════════════════════════════════

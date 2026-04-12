@@ -78,15 +78,16 @@ public class MonthlyGraphReportDoc {
      * This is called by ReportService after aggregating transactions.
      */
     public void generate() {
-        // Service layer populates dailyDataPoints, then we calculate totals
-        if (!dailyDataPoints.isEmpty()) {
+        if (dailyDataPoints == null || dailyDataPoints.isEmpty()) {
+            monthlyTotal = 0.0;
+            averageDailyRevenue = 0.0;
+        } else {
             monthlyTotal = dailyDataPoints.stream()
-                .mapToDouble(d -> d.getRevenue())
+                .mapToDouble(d -> d.getRevenue() != null ? d.getRevenue() : 0.0)
                 .sum();
-            
             averageDailyRevenue = monthlyTotal / dailyDataPoints.size();
         }
-        
+
         this.generatedAt = LocalDateTime.now();
     }
 

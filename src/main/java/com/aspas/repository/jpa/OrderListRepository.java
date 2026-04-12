@@ -44,6 +44,10 @@ public interface OrderListRepository extends JpaRepository<OrderList, Long> {
      */
     Optional<OrderList> findByOrderDate(LocalDate orderDate);
 
+    long countByOrderDate(LocalDate orderDate);
+
+    List<OrderList> findAllByOrderDateOrderByOrderIdAsc(LocalDate orderDate);
+
     /**
      * Check if an order already exists for a given date.
      * Prevents duplicate order generation.

@@ -37,7 +37,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
      * @param orderId parent order list ID
      * @return order items for that order
      */
-    List<OrderItem> findByOrderId(Long orderId);
+    List<OrderItem> findByOrderList_OrderId(Long orderId);
 
     /**
      * Find all order items for a specific part (across all orders).
@@ -74,7 +74,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
      * @param vendorId vendor ID
      * @return items for that order-vendor combination
      */
-    @Query("SELECT oi FROM OrderItem oi WHERE oi.orderId = :orderId AND oi.vendorId = :vendorId")
+    @Query("SELECT oi FROM OrderItem oi WHERE oi.orderList.orderId = :orderId AND oi.vendorId = :vendorId")
     List<OrderItem> findByOrderAndVendor(
         @Param("orderId") Long orderId,
         @Param("vendorId") Long vendorId

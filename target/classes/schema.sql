@@ -94,10 +94,12 @@ CREATE TABLE IF NOT EXISTS part_vendor (
 CREATE TABLE IF NOT EXISTS order_lists (
     order_id    BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_date  DATE NOT NULL,
+    vendor_id   BIGINT NULL,
     total_items INT DEFAULT 0,
     is_printed  BOOLEAN DEFAULT FALSE,
     print_text  TEXT,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ol_vendor FOREIGN KEY (vendor_id) REFERENCES vendors(vendor_id)
 ) ENGINE=InnoDB;
 
 

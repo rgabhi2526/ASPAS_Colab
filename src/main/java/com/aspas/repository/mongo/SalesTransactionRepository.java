@@ -142,7 +142,8 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
      */
     @Aggregation(pipeline = {
         "{ $match: { 'partNumber': ?0, 'transactionDate': { $gte: ?1, $lte: ?2 } } }",
-        "{ $group: { '_id': '$partNumber', 'totalQty': { $sum: '$quantitySold' }, 'totalRevenue': { $sum: '$revenueAmount' } } }"
+        "{ $addFields: { '_lineRev': { $ifNull: ['$revenueAmount', { $multiply: [{ $ifNull: ['$quantitySold', 0] }, { $ifNull: ['$sellingPrice', 0] }] }] } } }",
+        "{ $group: { '_id': '$partNumber', 'totalQty': { $sum: '$quantitySold' }, 'totalRevenue': { $sum: '$_lineRev' } } }"
     })
     List<PartSalesAggregate> aggregateSalesForPart(
         String partNumber,
@@ -167,7 +168,8 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
      */
     @Aggregation(pipeline = {
         "{ $match: { 'transactionDate': { $gte: ?0, $lte: ?1 } } }",
-        "{ $group: { '_id': { $dayOfMonth: '$transactionDate' }, 'dailyRevenue': { $sum: '$revenueAmount' }, 'transactionCount': { $sum: 1 } } }",
+        "{ $addFields: { '_lineRev': { $ifNull: ['$revenueAmount', { $multiply: [{ $ifNull: ['$quantitySold', 0] }, { $ifNull: ['$sellingPrice', 0] }] }] } } }",
+        "{ $group: { '_id': { $dayOfMonth: '$transactionDate' }, 'dailyRevenue': { $sum: '$_lineRev' }, 'transactionCount': { $sum: 1 } } }",
         "{ $sort: { '_id': 1 } }"
     })
     List<DailyRevenueAggregate> aggregateDailyRevenueForMonth(
@@ -187,7 +189,8 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
      */
     @Aggregation(pipeline = {
         "{ $match: { 'transactionDate': { $gte: ?0, $lte: ?1 } } }",
-        "{ $group: { '_id': null, 'totalRevenue': { $sum: '$revenueAmount' }, 'totalTransactions': { $sum: 1 } } }"
+        "{ $addFields: { '_lineRev': { $ifNull: ['$revenueAmount', { $multiply: [{ $ifNull: ['$quantitySold', 0] }, { $ifNull: ['$sellingPrice', 0] }] }] } } }",
+        "{ $group: { '_id': null, 'totalRevenue': { $sum: '$_lineRev' }, 'totalTransactions': { $sum: 1 } } }"
     })
     List<DailyTotalAggregate> aggregateDailyTotal(
         LocalDateTime startOfDay,
@@ -203,7 +206,8 @@ public interface SalesTransactionRepository extends MongoRepository<SalesTransac
      */
     @Aggregation(pipeline = {
         "{ $match: { 'transactionDate': { $gte: ?0, $lte: ?1 } } }",
-        "{ $group: { '_id': '$partNumber', 'partName': { $first: '$partName' }, 'totalQty': { $sum: '$quantitySold' }, 'totalRevenue': { $sum: '$revenueAmount' } } }",
+        "{ $addFields: { '_lineRev': { $ifNull: ['$revenueAmount', { $multiply: [{ $ifNull: ['$quantitySold', 0] }, { $ifNull: ['$sellingPrice', 0] }] }] } } }",
+        "{ $group: { '_id': '$partNumber', 'partName': { $first: '$partName' }, 'totalQty': { $sum: '$quantitySold' }, 'totalRevenue': { $sum: '$_lineRev' } } }",
         "{ $sort: { 'totalQty': -1 } }",
         "{ $limit: 10 }"
     })

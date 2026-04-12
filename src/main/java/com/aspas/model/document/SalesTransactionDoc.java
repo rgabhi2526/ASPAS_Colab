@@ -17,6 +17,10 @@ import java.time.LocalDateTime;
  *   - DFD Store: D2 Sales Log
  *   - Sequence Diagram: Message #6 "<<create>> SalesTransactionDoc"
  * 
+ * BSON field names match Java properties (camelCase): transactionId, transactionDate,
+ * partNumber, partName, quantitySold, sellingPrice, revenueAmount, createdAt.
+ * Collection name: {@code sales_transactions} (see {@code @Document} on this class).
+ *
  * High-write analytics collection. Every sale creates one document.
  * Used for:
  *   1. JIT threshold calculation (7-day rolling average)

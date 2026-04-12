@@ -10,9 +10,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.aspas.model.document.SalesTransactionDoc;
+import com.aspas.model.dto.SalesDayStatsDTO;
+import java.time.LocalDate;
+import java.util.List;
 
 /**
  * ================================================================
@@ -38,12 +43,47 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/sales")
+@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "1. Sales", description = "UC-01: Process Sale & Update Inventory")
 public class SaleController {
 
     private final SystemControllerService systemController;
+
+    /**
+     * List transactions for a given day (defaults to today). UC-07 / D2 sales log.
+     *
+     * Example: GET /api/sales/transactions?date=2026-04-12
+     */
+    @GetMapping("/transactions")
+    @Operation(
+        summary = "List transactions for a day",
+        description = "Returns sales from MongoDB sales_transactions for the given date (default: today)"
+    )
+    public ResponseEntity<List<SalesTransactionDoc>> listTransactions(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        LocalDate d = date != null ? date : LocalDate.now();
+        log.info("API: GET /api/sales/transactions?date={}", d);
+        return ResponseEntity.ok(systemController.listTransactionsForDate(d));
+    }
+
+    /**
+     * Aggregated transaction count and revenue for a day (MongoDB {@code sales_transactions}).
+     */
+    @GetMapping("/stats")
+    @Operation(
+        summary = "Daily sales stats from MongoDB",
+        description = "totalRevenue and transactionCount aggregated from sales_transactions for the given date"
+    )
+    public ResponseEntity<SalesDayStatsDTO> salesStats(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        LocalDate d = date != null ? date : LocalDate.now();
+        log.info("API: GET /api/sales/stats?date={}", d);
+        return ResponseEntity.ok(systemController.getSalesStatsForDay(d));
+    }
 
     /**
      * Process a sale transaction.

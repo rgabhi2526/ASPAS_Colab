@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
+import static org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -39,12 +40,14 @@ import java.util.List;
  *   GET  /api/orders                   → List all orders
  *   GET  /api/orders/{id}              → Get specific order
  *   GET  /api/orders/{id}/print        → Get print-ready text
- *   GET  /api/orders/by-date/{date}    → Get order by date
+ *   GET  /api/orders/by-date/{date}    → All order lists for that date (one per vendor)
+ *   GET  /api/orders/search?date=      → Same as by-date (query param)
  *
  * ================================================================
  */
 @RestController
 @RequestMapping("/api/orders")
+@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "2. Orders", description = "UC-03: Generate Daily End-of-Day Orders")
@@ -69,7 +72,7 @@ public class OrderController {
      * Normally triggered by the System Clock scheduler at 11:55 PM,
      * but can be manually triggered via this endpoint.
      *
-     * @return generated order list with all items
+     * @return generated order lists (one per vendor); may include one empty placeholder
      *
      * Example:
      *   POST /api/orders/generate
@@ -85,10 +88,10 @@ public class OrderController {
         @ApiResponse(responseCode = "201", description = "Order generated successfully"),
         @ApiResponse(responseCode = "200", description = "Order already exists for today")
     })
-    public ResponseEntity<OrderResponseDTO> generateDailyOrder() {
+    public ResponseEntity<List<OrderResponseDTO>> generateDailyOrder() {
         log.info("API: POST /api/orders/generate — Manual EOD trigger");
 
-        OrderResponseDTO response = systemController.triggerEndOfDayOrder();
+        List<OrderResponseDTO> response = systemController.triggerEndOfDayOrder();
 
         return ResponseEntity
             .status(HttpStatus.CREATED)
@@ -116,6 +119,47 @@ public class OrderController {
     }
 
     /**
+     * Get an order by date (query parameter).
+     *
+     * Example:
+     *   GET /api/orders/search?date=2026-03-15
+     */
+    @GetMapping("/search")
+    @Operation(
+        summary = "Search order by date",
+        description = "Returns all vendor order lists for a calendar date (same as by-date path)"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Orders found"),
+        @ApiResponse(responseCode = "404", description = "No order for that date")
+    })
+    public ResponseEntity<List<OrderResponseDTO>> searchOrderByDate(
+            @RequestParam @DateTimeFormat(iso = ISO.DATE) LocalDate date
+    ) {
+        log.info("API: GET /api/orders/search?date={}", date);
+        return ResponseEntity.ok(orderService.getOrdersByDate(date));
+    }
+
+    /**
+     * All order lists for a calendar date (one per vendor after EOD grouping).
+     */
+    @GetMapping("/by-date/{date}")
+    @Operation(
+        summary = "Get orders by date",
+        description = "Returns all order lists generated on a specific date"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Orders found"),
+        @ApiResponse(responseCode = "404", description = "No order for that date")
+    })
+    public ResponseEntity<List<OrderResponseDTO>> getOrdersByDatePath(
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        log.info("API: GET /api/orders/by-date/{}", date);
+        return ResponseEntity.ok(orderService.getOrdersByDate(date));
+    }
+
+    /**
      * Get a specific order by ID.
      *
      * @param orderId order database ID
@@ -139,33 +183,6 @@ public class OrderController {
         log.info("API: GET /api/orders/{}", orderId);
 
         OrderResponseDTO response = orderService.getOrderById(orderId);
-        return ResponseEntity.ok(response);
-    }
-
-    /**
-     * Get an order by date.
-     *
-     * @param date order date (format: yyyy-MM-dd)
-     * @return the order for that date
-     *
-     * Example:
-     *   GET /api/orders/by-date/2026-03-15
-     */
-    @GetMapping("/by-date/{date}")
-    @Operation(
-        summary = "Get order by date",
-        description = "Returns the order list generated on a specific date"
-    )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Order found"),
-        @ApiResponse(responseCode = "404", description = "No order for that date")
-    })
-    public ResponseEntity<OrderResponseDTO> getOrderByDate(
-            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
-    ) {
-        log.info("API: GET /api/orders/by-date/{}", date);
-
-        OrderResponseDTO response = orderService.getOrderByDate(date);
         return ResponseEntity.ok(response);
     }
 

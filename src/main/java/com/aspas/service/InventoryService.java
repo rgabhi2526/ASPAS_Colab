@@ -91,7 +91,53 @@ public class InventoryService {
             );
         }
 
+        StorageRack resolved = resolveStorageRack(part.getStorageRack());
+        int qty = part.getCurrentQuantity() != null ? part.getCurrentQuantity() : 0;
+        assertRackHasCapacity(resolved, qty, null);
+        part.setStorageRack(resolved);
         return sparePartRepository.save(part);
+    }
+
+    /**
+     * Turn JSON stub ({@code storageRack: { rackId }} or {@code { rackNumber }}) into a managed rack entity.
+     */
+    private StorageRack resolveStorageRack(StorageRack stub) {
+        if (stub == null) {
+            return null;
+        }
+        if (stub.getRackId() != null) {
+            return storageRackRepository.findById(stub.getRackId()).orElse(null);
+        }
+        if (stub.getRackNumber() != null) {
+            return storageRackRepository.findByRackNumber(stub.getRackNumber()).orElse(null);
+        }
+        return null;
+    }
+
+    /**
+     * Enforces rack max capacity: sum of {@code currentQuantity} of other parts on the rack
+     * plus this part's assigned quantity must not exceed {@code maxCapacity}.
+     */
+    private void assertRackHasCapacity(StorageRack managedRack, int quantityForThisPart, Long excludePartId) {
+        if (managedRack == null || managedRack.getRackId() == null) {
+            return;
+        }
+        Integer max = managedRack.getMaxCapacity();
+        if (max == null || max <= 0) {
+            return;
+        }
+        Long sumLb = sparePartRepository.sumCurrentQuantityOnRackExcluding(
+            managedRack.getRackId(), excludePartId);
+        int otherQty = sumLb != null ? sumLb.intValue() : 0;
+        if (otherQty + quantityForThisPart > max) {
+            Integer rackNo = managedRack.getRackNumber();
+            throw new IllegalArgumentException(String.format(
+                "Rack full: rack #%s allows %d units; %d already assigned on this rack; "
+                    + "cannot assign %d for this part (would exceed capacity).",
+                rackNo != null ? rackNo : managedRack.getRackId(),
+                max, otherQty, quantityForThisPart
+            ));
+        }
     }
 
     /**
@@ -107,12 +153,32 @@ public class InventoryService {
 
         log.info("Updating part: {}", partNumber);
 
-        existing.setPartName(updatedPart.getPartName());
-        existing.setUnitPrice(updatedPart.getUnitPrice());
-        existing.setSizeCategory(updatedPart.getSizeCategory());
+        StorageRack proposedRack = updatedPart.getStorageRack() != null
+            ? resolveStorageRack(updatedPart.getStorageRack())
+            : existing.getStorageRack();
+        int proposedQty = updatedPart.getCurrentQuantity() != null
+            ? updatedPart.getCurrentQuantity()
+            : (existing.getCurrentQuantity() != null ? existing.getCurrentQuantity() : 0);
 
+        assertRackHasCapacity(proposedRack, proposedQty, existing.getPartId());
+
+        if (updatedPart.getPartName() != null) {
+            existing.setPartName(updatedPart.getPartName());
+        }
+        if (updatedPart.getUnitPrice() != null) {
+            existing.setUnitPrice(updatedPart.getUnitPrice());
+        }
+        if (updatedPart.getSizeCategory() != null) {
+            existing.setSizeCategory(updatedPart.getSizeCategory());
+        }
         if (updatedPart.getCurrentQuantity() != null) {
             existing.setCurrentQuantity(updatedPart.getCurrentQuantity());
+        }
+        if (updatedPart.getThresholdValue() != null) {
+            existing.setThresholdValue(updatedPart.getThresholdValue());
+        }
+        if (updatedPart.getStorageRack() != null) {
+            existing.setStorageRack(proposedRack);
         }
 
         return sparePartRepository.save(existing);
@@ -224,6 +290,8 @@ public class InventoryService {
 
         log.info("Assigning part {} to rack #{}", partNumber, rackNumber);
 
+        int qty = part.getCurrentQuantity() != null ? part.getCurrentQuantity() : 0;
+        assertRackHasCapacity(rack, qty, part.getPartId());
         part.setStorageRack(rack);
         return sparePartRepository.save(part);
     }

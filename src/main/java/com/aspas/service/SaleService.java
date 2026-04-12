@@ -5,6 +5,8 @@ import com.aspas.exception.PartNotFoundException;
 import com.aspas.model.document.SalesTransactionDoc;
 import com.aspas.model.dto.SaleRequestDTO;
 import com.aspas.model.dto.SaleResponseDTO;
+import com.aspas.model.dto.SalesDayStatsDTO;
+import com.aspas.repository.mongo.SalesTransactionRepository.DailyTotalAggregate;
 import com.aspas.model.entity.SparePart;
 import com.aspas.repository.jpa.SparePartRepository;
 import com.aspas.repository.mongo.SalesTransactionRepository;
@@ -12,8 +14,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -150,6 +155,39 @@ public class SaleService {
             transactionId, transaction.getRevenueAmount());
 
         return response;
+    }
+
+    /**
+     * List sales transactions for a calendar day (MongoDB D2).
+     */
+    public List<SalesTransactionDoc> listTransactionsForDate(LocalDate date) {
+        LocalDateTime start = date.atStartOfDay();
+        LocalDateTime end = date.atTime(LocalTime.MAX);
+        return salesTransactionRepository.findTransactionsForDay(start, end);
+    }
+
+    /**
+     * Dashboard KPIs: count and revenue sum from {@code sales_transactions} for one day.
+     */
+    public SalesDayStatsDTO getSalesStatsForDay(LocalDate date) {
+        LocalDateTime start = date.atStartOfDay();
+        LocalDateTime end = date.atTime(LocalTime.MAX);
+        List<DailyTotalAggregate> rows = salesTransactionRepository.aggregateDailyTotal(start, end);
+        double rev = 0.0;
+        int cnt = 0;
+        if (rows != null && !rows.isEmpty()) {
+            DailyTotalAggregate a = rows.get(0);
+            if (a.getTotalRevenue() != null) {
+                rev = a.getTotalRevenue();
+            }
+            if (a.getTotalTransactions() != null) {
+                cnt = a.getTotalTransactions();
+            }
+        }
+        return SalesDayStatsDTO.builder()
+            .totalRevenue(rev)
+            .transactionCount(cnt)
+            .build();
     }
 
     /**

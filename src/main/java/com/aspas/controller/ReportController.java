@@ -43,6 +43,7 @@ import java.time.LocalDate;
  */
 @RestController
 @RequestMapping("/api/reports")
+@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "3. Reports", description = "UC-05/07/08: Analytical Reports (Daily Revenue & Monthly Graph)")

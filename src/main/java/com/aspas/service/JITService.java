@@ -86,6 +86,10 @@ public class JITService {
         // ACTIVITY DIAGRAM: "More Parts to Process?" → LOOP
         // ─────────────────────────────────────────────
         for (SparePart part : allParts) {
+            if (part == null || part.getPartNumber() == null || part.getPartNumber().isBlank()) {
+                log.warn("Skipping invalid spare part row (null or blank partNumber)");
+                continue;
+            }
 
             // ─────────────────────────────────────────
             // ACTIVITY DIAGRAM: "Get Sales Data for Last 7 Days"
@@ -103,7 +107,7 @@ public class JITService {
             // ─────────────────────────────────────────
             int newThreshold = JITCalculator.calculateThreshold(totalSoldIn7Days);
 
-            int oldThreshold = part.getThresholdValue();
+            int oldThreshold = part.getThresholdValue() != null ? part.getThresholdValue() : 0;
 
             // ─────────────────────────────────────────
             // ACTIVITY DIAGRAM: "Update Inventory Database"
@@ -117,7 +121,7 @@ public class JITService {
             updatedCount++;
 
             log.debug("  Part {} [{}]: 7-day sales = {}, Threshold: {} → {}",
-                part.getPartNumber(), part.getPartName(),
+                part.getPartNumber(), part.getPartName() != null ? part.getPartName() : "",
                 totalSoldIn7Days, oldThreshold, newThreshold);
         }
 
@@ -133,6 +137,9 @@ public class JITService {
      * @return the new threshold value
      */
     public int calculateThresholdForPart(String partNumber) {
+        if (partNumber == null || partNumber.isBlank()) {
+            return JITCalculator.calculateThreshold(0);
+        }
         LocalDateTime endDate = LocalDateTime.now();
         LocalDateTime startDate = endDate.minusDays(7).with(LocalTime.MIN);
 
@@ -159,14 +166,18 @@ public class JITService {
             LocalDateTime startDate,
             LocalDateTime endDate
     ) {
-        List<PartSalesAggregate> result =
-            salesTransactionRepository.aggregateSalesForPart(
-                partNumber, startDate, endDate
-            );
+        try {
+            List<PartSalesAggregate> result =
+                salesTransactionRepository.aggregateSalesForPart(
+                    partNumber, startDate, endDate
+                );
 
-        if (result != null && !result.isEmpty()) {
-            Integer totalQty = result.get(0).getTotalQty();
-            return totalQty != null ? totalQty : 0;
+            if (result != null && !result.isEmpty()) {
+                Integer totalQty = result.get(0).getTotalQty();
+                return totalQty != null ? totalQty : 0;
+            }
+        } catch (Exception e) {
+            log.warn("Mongo read failed for part {} (JIT uses 0 sold): {}", partNumber, e.getMessage());
         }
 
         return 0;

@@ -1,5 +1,6 @@
 package com.aspas.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import jakarta.persistence.*;
@@ -55,9 +56,10 @@ public class OrderItem {
     @Column(nullable = false, length = 255)
     private String vendorAddress;
 
-    // Foreign keys (informational, not navigation)
-    @Column(name = "order_id")
-    private Long orderId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "order_id")
+    @JsonIgnore
+    private OrderList orderList;
 
     @Column(name = "part_id")
     private Long partId;

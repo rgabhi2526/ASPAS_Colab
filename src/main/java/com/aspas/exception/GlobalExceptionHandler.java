@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.LocalDateTime;
@@ -133,6 +134,20 @@ public class GlobalExceptionHandler {
     ) {
         log.error("Invalid argument: {}", ex.getMessage());
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    /**
+     * FK violations (e.g. delete vendor still linked to parts).
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrity(
+            DataIntegrityViolationException ex
+    ) {
+        log.error("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
+        return buildErrorResponse(
+            HttpStatus.CONFLICT,
+            "Cannot complete operation: record is still referenced by other data."
+        );
     }
 
     /**

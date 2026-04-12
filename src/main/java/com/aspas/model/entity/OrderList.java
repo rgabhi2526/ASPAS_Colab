@@ -46,6 +46,13 @@ public class OrderList implements Printable {
     @Column(nullable = false)
     private LocalDate orderDate;
 
+    /**
+     * Primary vendor for this order (one OrderList per vendor per day when items exist).
+     * Null when the list is an empty placeholder (no reorders).
+     */
+    @Column(name = "vendor_id")
+    private Long vendorId;
+
     @Column(nullable = false)
     private Integer totalItems = 0;
 
@@ -58,14 +65,13 @@ public class OrderList implements Printable {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // Composition: OrderItems are owned by OrderList
-    // CASCADE delete ensures items are deleted when list is deleted
+    // Composition: OrderItems are owned by OrderList (FK order_id on order_items)
     @OneToMany(
+        mappedBy = "orderList",
         cascade = CascadeType.ALL,
         orphanRemoval = true,
         fetch = FetchType.EAGER
     )
-    @JoinColumn(name = "order_id")
     private List<OrderItem> orderItems = new ArrayList<>();
 
     @PrePersist
@@ -82,6 +88,7 @@ public class OrderList implements Printable {
      */
     public void addOrderItem(OrderItem item) {
         orderItems.add(item);
+        item.setOrderList(this);
         totalItems = orderItems.size();
     }
 
@@ -90,6 +97,7 @@ public class OrderList implements Printable {
      */
     public void removeOrderItem(OrderItem item) {
         orderItems.remove(item);
+        item.setOrderList(null);
         totalItems = orderItems.size();
     }
 

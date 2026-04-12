@@ -1,5 +1,6 @@
 package com.aspas.controller;
 
+import com.aspas.model.entity.SparePart;
 import com.aspas.model.entity.Vendor;
 import com.aspas.service.VendorService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,11 +33,13 @@ import java.util.List;
  *   DELETE /api/vendors/{id}                  → Remove vendor
  *   GET    /api/vendors/search?q=keyword      → Search vendors
  *   GET    /api/vendors/by-part/{partId}      → Vendors for a part
+ *   GET    /api/vendors/{id}/parts            → Parts supplied by vendor
  *
  * ════════════════════════════════════════════════════════════════
  */
 @RestController
 @RequestMapping("/api/vendors")
+@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "5. Vendors", description = "UC-04: Vendor Directory Management (DFD Store D3)")
@@ -55,6 +58,24 @@ public class VendorController {
     public ResponseEntity<List<Vendor>> getAllVendors() {
         log.info("API: GET /api/vendors");
         return ResponseEntity.ok(vendorService.getAllVendors());
+    }
+
+    /**
+     * Spare parts linked to a vendor through the part_vendor association.
+     *
+     * Example:
+     *   GET /api/vendors/1/parts
+     */
+    @GetMapping("/{vendorId}/parts")
+    @Operation(
+        summary = "Parts supplied by vendor",
+        description = "Returns spare parts mapped to this vendor in the part_vendor join table"
+    )
+    public ResponseEntity<List<SparePart>> getPartsForVendor(
+            @PathVariable Long vendorId
+    ) {
+        log.info("API: GET /api/vendors/{}/parts", vendorId);
+        return ResponseEntity.ok(vendorService.getPartsSuppliedByVendor(vendorId));
     }
 
     /**

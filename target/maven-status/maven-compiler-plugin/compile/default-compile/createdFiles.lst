@@ -7,6 +7,7 @@ com/aspas/model/document/DailyRevenueReportDoc$TopSellingPart.class
 com/aspas/model/entity/OrderList.class
 com/aspas/controller/SaleController.class
 com/aspas/util/OrderFormatter.class
+com/aspas/model/dto/ReportResponseDTO$TopSellingPartDTO.class
 com/aspas/model/dto/ReportResponseDTO$ReportResponseDTOBuilder.class
 com/aspas/repository/mongo/MonthlyGraphReportRepository.class
 com/aspas/model/entity/StorageRack.class
@@ -14,6 +15,7 @@ com/aspas/repository/mongo/SalesTransactionRepository$TopSellingAggregate.class
 com/aspas/exception/PartNotFoundException.class
 com/aspas/model/dto/OrderResponseDTO.class
 com/aspas/model/dto/SaleRequestDTO.class
+com/aspas/model/dto/ReportResponseDTO$TopSellingPartDTO$TopSellingPartDTOBuilder.class
 com/aspas/model/document/SalesTransactionDoc$SalesTransactionDocBuilder.class
 com/aspas/service/InventoryService.class
 com/aspas/repository/jpa/OrderItemRepository.class
@@ -31,6 +33,7 @@ com/aspas/model/entity/StorageRack$StorageRackBuilder.class
 com/aspas/service/SystemControllerService.class
 com/aspas/model/dto/ReportRequestDTO$ReportRequestDTOBuilder.class
 com/aspas/controller/VendorController.class
+com/aspas/model/dto/SalesDayStatsDTO$SalesDayStatsDTOBuilder.class
 com/aspas/model/dto/SaleResponseDTO.class
 com/aspas/service/JITService.class
 com/aspas/repository/mongo/SalesTransactionRepository$DailyTotalAggregate.class
@@ -39,6 +42,7 @@ com/aspas/service/VendorService.class
 com/aspas/model/dto/OrderResponseDTO$OrderResponseDTOBuilder.class
 com/aspas/exception/OrderNotFoundException.class
 com/aspas/model/entity/Vendor$VendorBuilder.class
+com/aspas/model/dto/SalesDayStatsDTO.class
 com/aspas/model/document/DailyRevenueReportDoc.class
 com/aspas/model/entity/OrderItem.class
 com/aspas/model/dto/ReportResponseDTO$DailyDataPointDTO$DailyDataPointDTOBuilder.class
@@ -48,6 +52,7 @@ com/aspas/model/document/DailyRevenueReportDoc$DailyRevenueReportDocBuilder.clas
 com/aspas/model/dto/ReportRequestDTO.class
 com/aspas/exception/VendorNotFoundException.class
 com/aspas/repository/mongo/SalesTransactionRepository$PartSalesAggregate.class
+com/aspas/config/FaviconController.class
 com/aspas/service/SaleService.class
 com/aspas/service/ReportService.class
 com/aspas/repository/mongo/SalesTransactionRepository.class

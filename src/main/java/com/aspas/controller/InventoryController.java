@@ -52,6 +52,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api")
+@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "4. Inventory", description = "Inventory & JIT Threshold Management (DFD Store D1)")
@@ -120,7 +121,7 @@ public class InventoryController {
     @Operation(summary = "Add new spare part", description = "Creates a new part in inventory")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Part created"),
-        @ApiResponse(responseCode = "400", description = "Validation error or duplicate part number")
+        @ApiResponse(responseCode = "400", description = "Validation error, duplicate part number, or rack full")
     })
     public ResponseEntity<SparePart> addPart(
             @Valid @RequestBody SparePart part
@@ -145,7 +146,8 @@ public class InventoryController {
     @Operation(summary = "Update spare part", description = "Updates part details")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Part updated"),
-        @ApiResponse(responseCode = "404", description = "Part not found")
+        @ApiResponse(responseCode = "404", description = "Part not found"),
+        @ApiResponse(responseCode = "400", description = "Rack full or invalid data")
     })
     public ResponseEntity<SparePart> updatePart(
             @PathVariable String partNumber,

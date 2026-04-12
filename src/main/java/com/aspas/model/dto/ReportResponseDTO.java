@@ -35,6 +35,9 @@ public class ReportResponseDTO {
     private Integer transactionCount;
     private Double averageDailyRevenue;
 
+    // Populated for daily reports (from cached DailyRevenueReportDoc)
+    private List<TopSellingPartDTO> topSellingParts;
+
     // For monthly reports: daily data points for graphing
     private List<DailyDataPointDTO> dailyDataPoints;
 
@@ -50,6 +53,16 @@ public class ReportResponseDTO {
     @Builder
     public static class DailyDataPointDTO {
         private Integer day;
+        private Double revenue;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class TopSellingPartDTO {
+        private String partNumber;
+        private Integer qtySold;
         private Double revenue;
     }
 }

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -123,6 +124,19 @@ public interface SparePartRepository extends JpaRepository<SparePart, Long> {
      * @return parts in that rack
      */
     List<SparePart> findByStorageRack_RackId(Integer rackId);
+
+    /**
+     * Sum of {@code currentQuantity} for parts on a rack (excluding one part, e.g. during update).
+     */
+    @Query("SELECT COALESCE(SUM(sp.currentQuantity), 0) FROM SparePart sp WHERE sp.storageRack IS NOT NULL "
+        + "AND sp.storageRack.rackId = :rackId "
+        + "AND (:excludePartId IS NULL OR sp.partId <> :excludePartId)")
+    Long sumCurrentQuantityOnRackExcluding(
+        @Param("rackId") Integer rackId,
+        @Param("excludePartId") Long excludePartId
+    );
+
+    List<SparePart> findByPartIdIn(Collection<Long> partIds);
 
     /**
      * Find all parts stored in a specific rack number.

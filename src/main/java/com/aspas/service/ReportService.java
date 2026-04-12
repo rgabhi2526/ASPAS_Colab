@@ -6,6 +6,7 @@ import com.aspas.model.document.MonthlyGraphReportDoc;
 import com.aspas.model.document.MonthlyGraphReportDoc.DailyDataPoint;
 import com.aspas.model.dto.ReportResponseDTO;
 import com.aspas.model.dto.ReportResponseDTO.DailyDataPointDTO;
+import com.aspas.model.dto.ReportResponseDTO.TopSellingPartDTO;
 import com.aspas.repository.mongo.DailyRevenueReportRepository;
 import com.aspas.repository.mongo.MonthlyGraphReportRepository;
 import com.aspas.repository.mongo.SalesTransactionRepository;
@@ -20,6 +21,7 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -76,14 +78,13 @@ public class ReportService {
      */
     public ReportResponseDTO getDailyRevenueReport(LocalDate date) {
 
-        log.info("═══ PROCESS 4.0: Generating Daily Revenue Report for {} ═══", date);
+        log.info("═══ PROCESS 4.0: Daily Revenue Report for {} (MongoDB daily_revenue_reports) ═══", date);
 
-        // Check if report already exists
         Optional<DailyRevenueReportDoc> existing =
             dailyRevenueReportRepository.findByReportDate(date);
 
         if (existing.isPresent()) {
-            log.info("  Returning cached report: {}", existing.get().getReportId());
+            log.info("  Loaded persisted report: {}", existing.get().getReportId());
             return buildDailyResponse(existing.get());
         }
 
@@ -165,15 +166,14 @@ public class ReportService {
      */
     public ReportResponseDTO getMonthlyGraphReport(int year, int month) {
 
-        log.info("═══ PROCESS 4.0: Generating Monthly Graph Report for {}/{} ═══",
+        log.info("═══ PROCESS 4.0: Monthly Graph Report for {}/{} (MongoDB monthly_graph_reports) ═══",
             month, year);
 
-        // Check if report already exists
         Optional<MonthlyGraphReportDoc> existing =
             monthlyGraphReportRepository.findByTargetMonthAndTargetYear(month, year);
 
         if (existing.isPresent()) {
-            log.info("  Returning cached report: {}", existing.get().getReportId());
+            log.info("  Loaded persisted report: {}", existing.get().getReportId());
             return buildMonthlyResponse(existing.get());
         }
 
@@ -202,8 +202,12 @@ public class ReportService {
 
         if (dailyAggregates != null) {
             for (DailyRevenueAggregate agg : dailyAggregates) {
+                if (agg == null) {
+                    continue;
+                }
+                Integer dayNum = agg.getId();
                 dataPoints.add(DailyDataPoint.builder()
-                    .day(agg.getId())
+                    .day(dayNum != null ? dayNum : 0)
                     .revenue(agg.getDailyRevenue() != null ? agg.getDailyRevenue() : 0.0)
                     .build()
                 );
@@ -267,12 +271,23 @@ public class ReportService {
      * Build a ReportResponseDTO from a DailyRevenueReportDoc.
      */
     private ReportResponseDTO buildDailyResponse(DailyRevenueReportDoc doc) {
+        List<TopSellingPartDTO> tops = new ArrayList<>();
+        if (doc.getTopSellingParts() != null) {
+            tops = doc.getTopSellingParts().stream()
+                .map(tp -> TopSellingPartDTO.builder()
+                    .partNumber(tp.getPartNumber())
+                    .qtySold(tp.getQtySold())
+                    .revenue(tp.getRevenue())
+                    .build())
+                .collect(Collectors.toList());
+        }
         return ReportResponseDTO.builder()
             .reportId(doc.getReportId())
             .reportType("DAILY")
             .reportDate(doc.getReportDate())
             .totalRevenue(doc.getDailyTotal())
             .transactionCount(doc.getTransactionCount())
+            .topSellingParts(tops)
             .generatedAt(doc.getGeneratedAt())
             .build();
     }
@@ -282,14 +297,17 @@ public class ReportService {
      */
     private ReportResponseDTO buildMonthlyResponse(MonthlyGraphReportDoc doc) {
 
-        List<DailyDataPointDTO> dataPointDTOs = doc.getDailyDataPoints()
-            .stream()
-            .map(dp -> DailyDataPointDTO.builder()
-                .day(dp.getDay())
-                .revenue(dp.getRevenue())
-                .build()
-            )
-            .collect(Collectors.toList());
+        List<DailyDataPointDTO> dataPointDTOs = new ArrayList<>();
+        if (doc.getDailyDataPoints() != null) {
+            dataPointDTOs = doc.getDailyDataPoints().stream()
+                .filter(Objects::nonNull)
+                .map(dp -> DailyDataPointDTO.builder()
+                    .day(dp.getDay())
+                    .revenue(dp.getRevenue() != null ? dp.getRevenue() : 0.0)
+                    .build()
+                )
+                .collect(Collectors.toList());
+        }
 
         return ReportResponseDTO.builder()
             .reportId(doc.getReportId())

@@ -1,12 +1,15 @@
 package com.aspas.service;
 
 import com.aspas.exception.VendorNotFoundException;
+import com.aspas.model.entity.SparePart;
 import com.aspas.model.entity.Vendor;
+import com.aspas.repository.jpa.SparePartRepository;
 import com.aspas.repository.jpa.VendorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,6 +35,7 @@ import java.util.Optional;
 public class VendorService {
 
     private final VendorRepository vendorRepository;
+    private final SparePartRepository sparePartRepository;
 
     // ══════════════════════════════════════════
     //  VENDOR CRUD
@@ -151,6 +155,20 @@ public class VendorService {
     public List<Vendor> getVendorsForPart(Long partId) {
         log.debug("Fetching vendors for part ID: {}", partId);
         return vendorRepository.findVendorsForPart(partId);
+    }
+
+    /**
+     * All spare parts supplied by a vendor (via {@code part_vendor} join table).
+     *
+     * @param vendorId vendor primary key
+     * @return parts linked to that vendor (may be empty)
+     */
+    public List<SparePart> getPartsSuppliedByVendor(Long vendorId) {
+        List<Long> partIds = vendorRepository.findPartIdsByVendor(vendorId);
+        if (partIds == null || partIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return sparePartRepository.findByPartIdIn(partIds);
     }
 
     /**

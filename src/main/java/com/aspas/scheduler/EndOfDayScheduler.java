@@ -2,6 +2,7 @@ package com.aspas.scheduler;
 
 import com.aspas.model.dto.OrderResponseDTO;
 import com.aspas.service.SystemControllerService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -86,19 +87,20 @@ public class EndOfDayScheduler {
             //   Message #16-22 : LOOP scan + order items
             //   Message #23    : print()
             // ─────────────────────────────────────────────
-            OrderResponseDTO order = systemController.triggerEndOfDayOrder();
+            List<OrderResponseDTO> orders = systemController.triggerEndOfDayOrder();
 
             LocalDateTime endTime = LocalDateTime.now();
             long durationMs = java.time.Duration.between(startTime, endTime).toMillis();
 
+            int lines = orders.stream().mapToInt(o -> o.getTotalItems() != null ? o.getTotalItems() : 0).sum();
             log.info("║                                                          ║");
-            log.info("║  ✓ Order Generated Successfully                          ║");
-            log.info("║  Order ID    : {}                                        ║",
-                order.getOrderId());
-            log.info("║  Items       : {}                                        ║",
-                order.getTotalItems());
-            log.info("║  Is Printed  : {}                                        ║",
-                order.getIsPrinted());
+            log.info("║  ✓ EOD orders generated                                  ║");
+            log.info("║  Vendor lists: {}                                        ║",
+                orders.size());
+            log.info("║  Total line items: {}                                    ║",
+                lines);
+            log.info("║  First order ID : {}                                     ║",
+                orders.isEmpty() ? "—" : orders.get(0).getOrderId());
             log.info("║  Duration    : {} ms                                     ║",
                 durationMs);
             log.info("╚══════════════════════════════════════════════════════════╝");

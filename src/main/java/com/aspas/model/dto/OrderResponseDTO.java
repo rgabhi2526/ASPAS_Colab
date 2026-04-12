@@ -27,6 +27,9 @@ public class OrderResponseDTO {
 
     private Long orderId;
 
+    /** Vendor this EOD order is for (null if empty placeholder list). */
+    private Long vendorId;
+
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate orderDate;
 
