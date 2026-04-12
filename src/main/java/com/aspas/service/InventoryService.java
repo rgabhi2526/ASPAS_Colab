@@ -1,14 +1,18 @@
 package com.aspas.service;
 
 import com.aspas.exception.PartNotFoundException;
+import com.aspas.model.dto.SparePartRequestDTO;
 import com.aspas.model.entity.SparePart;
 import com.aspas.model.entity.StorageRack;
+import com.aspas.model.entity.Vendor;
 import com.aspas.repository.jpa.SparePartRepository;
 import com.aspas.repository.jpa.StorageRackRepository;
+import com.aspas.repository.jpa.VendorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -18,6 +22,7 @@ public class InventoryService {
 
     private final SparePartRepository sparePartRepository;
     private final StorageRackRepository storageRackRepository;
+    private final VendorRepository vendorRepository;
 
     public List<SparePart> getAllParts() {
         log.debug("Fetching all spare parts");
@@ -36,13 +41,32 @@ public class InventoryService {
     }
 
     @Transactional
-    public SparePart addPart(SparePart part) {
-        log.info("Adding new part: {} [{}]", part.getPartNumber(), part.getPartName());
+    public SparePart addPart(SparePartRequestDTO dto) {
+        log.info("Adding new part: {} [{}]", dto.getPartNumber(), dto.getPartName());
 
-        if (sparePartRepository.existsByPartNumber(part.getPartNumber())) {
+        if (sparePartRepository.existsByPartNumber(dto.getPartNumber())) {
             throw new IllegalArgumentException(
-                "Part number already exists: " + part.getPartNumber()
+                "Part number already exists: " + dto.getPartNumber()
             );
+        }
+
+        SparePart part = SparePart.builder()
+            .partNumber(dto.getPartNumber())
+            .partName(dto.getPartName())
+            .currentQuantity(dto.getCurrentQuantity() != null ? dto.getCurrentQuantity() : 0)
+            .thresholdValue(dto.getThresholdValue() != null ? dto.getThresholdValue() : 0)
+            .unitPrice(dto.getUnitPrice())
+            .sizeCategory(dto.getSizeCategory() != null ? dto.getSizeCategory() : "MEDIUM")
+            .build();
+
+        if (dto.getVendorIds() != null && !dto.getVendorIds().isEmpty()) {
+            List<Vendor> vendors = new ArrayList<>();
+            for (Long vendorId : dto.getVendorIds()) {
+                vendors.add(vendorRepository.findById(vendorId)
+                    .orElseThrow(() -> new IllegalArgumentException("Vendor not found: " + vendorId)));
+            }
+            part.setVendors(vendors);
+            log.info("Linked {} vendor(s) to part {}", vendors.size(), dto.getPartNumber());
         }
 
         return sparePartRepository.save(part);

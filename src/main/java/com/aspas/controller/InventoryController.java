@@ -1,5 +1,6 @@
 package com.aspas.controller;
 
+import com.aspas.model.dto.SparePartRequestDTO;
 import com.aspas.model.entity.SparePart;
 import com.aspas.model.entity.StorageRack;
 import com.aspas.service.InventoryService;
@@ -57,10 +58,10 @@ public class InventoryController {
         @ApiResponse(responseCode = "400", description = "Validation error or duplicate part number")
     })
     public ResponseEntity<SparePart> addPart(
-            @Valid @RequestBody SparePart part
+            @Valid @RequestBody SparePartRequestDTO partRequest
     ) {
-        log.info("API: POST /api/parts — {}", part.getPartNumber());
-        SparePart saved = inventoryService.addPart(part);
+        log.info("API: POST /api/parts — {}", partRequest.getPartNumber());
+        SparePart saved = inventoryService.addPart(partRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
