@@ -2306,6 +2306,7 @@ tbody td {
 // API & STATE (live data — no static inventory arrays)
 // =====================================================
 const API = '';
+/** Same origin as API (Spring Boot); controllers use @CrossOrigin — no extra CORS setup in the browser for this SPA. */
 let partsCache = [];
 let vendorsCache = [];
 let selectedOrderId = null;
@@ -2317,6 +2318,11 @@ function localISODate(d) {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+/** UC-01 / UC-07: calendar “today” in YYYY-MM-DD for stats, daily report, and same-day transaction queries. */
+function getTodayDate() {
+  return localISODate(new Date());
 }
 
 function addDays(d, n) {
@@ -2708,7 +2714,12 @@ function findPart(num) {
 }
 
 async function loadParts() {
-  partsCache = await apiGetJson('/api/parts');
+  try {
+    const raw = await apiGetJson('/api/parts');
+    partsCache = Array.isArray(raw) ? raw : [];
+  } catch (_) {
+    partsCache = [];
+  }
   return partsCache;
 }
 
@@ -2821,38 +2832,68 @@ function renderBarChart(containerId, data, prevData, maxH, barLabels) {
   }).join('');
 }
 
+/**
+ * UC-07 / UC-04: map backend hourlyDataPoints to fixed slots 09:00–15:00; missing hours → 0.
+ */
+function hourlyBucketsFromReport(daily) {
+  const hourLabels = ['09','10','11','12','13','14','15'];
+  const buckets = new Array(7).fill(0);
+  const pts = daily && Array.isArray(daily.hourlyDataPoints) ? daily.hourlyDataPoints : [];
+  const map = {};
+  pts.forEach(pt => {
+    if (!pt || pt.hour == null) return;
+    const h = Number(pt.hour);
+    const rev = pt.revenue != null ? Number(pt.revenue) : 0;
+    if (!Number.isNaN(h)) map[h] = rev;
+  });
+  for (let i = 0; i < 7; i++) {
+    buckets[i] = map[9 + i] != null ? map[9 + i] : 0;
+  }
+  return { buckets, hourLabels };
+}
+
 function renderHourlyChart(hourlyBuckets, hourLabels) {
   const el = document.getElementById('hourlyChart');
   if (!el) return;
   const H = hourlyBuckets && hourlyBuckets.length ? hourlyBuckets : new Array(7).fill(0);
   const L = hourLabels || ['09','10','11','12','13','14','15'];
   const max = Math.max(...H, 1);
-  el.innerHTML = H.map((v, i) => `
+  el.innerHTML = H.map((v, i) => {
+    const hPx = Math.round((v / max) * 180);
+    return `
     <div class="bar-group">
-      <div class="bar" style="height:${Math.round((v/max)*180)}px" data-tooltip="₹${Number(v||0).toLocaleString()}"></div>
+      <div class="bar" style="height:${Math.max(hPx, v > 0 ? 3 : 0)}px" data-tooltip="₹${Number(v||0).toLocaleString()}"></div>
       <div class="bar-label">${L[i]}:00</div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
+/**
+ * UC-08: monthly dailyDataPoints — sparse months OK; sort by calendar day; revenue defaults to 0.
+ */
 function renderMonthlyChart(dailyPoints) {
   const el = document.getElementById('monthlyChart');
   if (!el) return;
-  const pts = Array.isArray(dailyPoints) ? dailyPoints : [];
+  let pts = Array.isArray(dailyPoints) ? dailyPoints.slice() : [];
   if (!pts.length) {
     el.innerHTML = '<div class="bar-group"><div class="bar-label">No data</div></div>';
     return;
   }
-  const revs = pts.map(d => (d && d.revenue != null ? d.revenue : 0) || 0);
+  pts.sort((a, b) => (Number(a?.day) || 0) - (Number(b?.day) || 0));
+  const revs = pts.map(d => {
+    const r = d && d.revenue != null ? Number(d.revenue) : 0;
+    return Number.isFinite(r) ? r : 0;
+  });
   const maxVal = Math.max(...revs, 1);
   const peak = Math.max(...revs);
   el.innerHTML = pts.map((dp, i) => {
-    const v = (dp && dp.revenue != null ? dp.revenue : 0) || 0;
+    const v = dp && dp.revenue != null ? Number(dp.revenue) : 0;
+    const safeV = Number.isFinite(v) ? v : 0;
     const dayNum = dp && dp.day != null ? dp.day : (i + 1);
-    const barH = Math.round((v / maxVal) * 200);
+    const barH = Math.round((safeV / maxVal) * 200);
     return `
     <div class="bar-group">
-      <div class="bar" style="height:${Math.max(barH, 3)}px;background:${v===peak && v>0?'var(--green)':'var(--accent)'}" data-tooltip="Day ${dayNum}: ₹${v.toLocaleString()}"></div>
+      <div class="bar" style="height:${Math.max(barH, 3)}px;background:${safeV===peak && safeV>0?'var(--green)':'var(--accent)'}" data-tooltip="Day ${dayNum}: ₹${safeV.toLocaleString()}"></div>
       <div class="bar-label">${dayNum}</div>
     </div>`;
   }).join('');
@@ -2866,11 +2907,22 @@ function renderTopPartsList(rows) {
     return;
   }
   const maxQty = Math.max(...rows.map(p => p.qtySold || 0), 1);
-  el.innerHTML = rows.map(p => `
+  el.innerHTML = rows.map(p => {
+    let rev = p.revenue != null ? Number(p.revenue) : 0;
+    if (!rev && p.qtySold) {
+      const fp = findPart(p.partNumber);
+      rev = txnLineRevenue({
+        revenueAmount: null,
+        quantitySold: p.qtySold,
+        sellingPrice: fp ? fp.unitPrice : null,
+        unitPrice: fp ? fp.unitPrice : null
+      });
+    }
+    return `
     <div style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px">
         <div style="font-size:12px;font-weight:600">${p.partNumber} ${findPart(p.partNumber)?.partName ? '— ' + findPart(p.partNumber).partName : ''}</div>
-        <div style="font-family:var(--mono);font-size:11px;color:var(--green)">₹${Number(p.revenue||0).toLocaleString()}</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--green)">₹${Number(rev||0).toLocaleString()}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <div class="progress-wrap" style="flex:1">
@@ -2878,8 +2930,8 @@ function renderTopPartsList(rows) {
         </div>
         <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">${p.qtySold||0} units</div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 /** Jackson may emit ISO string or numeric array for LocalDateTime. */
@@ -2944,26 +2996,33 @@ async function loadDashboardCharts() {
 
 async function refreshDashboard() {
   await loadParts();
-  const belowList = await apiGetJson('/api/parts/below-threshold').catch(() => []);
+  let belowList = [];
+  try {
+    const bl = await apiGetJson('/api/parts/below-threshold');
+    belowList = Array.isArray(bl) ? bl : [];
+  } catch (_) { belowList = []; }
   const below = belowList.length;
   const total = partsCache.length;
-  const racks = await apiGetJson('/api/racks').catch(() => []);
-  const todayIso = localISODate(new Date());
+  let racks = [];
+  try {
+    const rk = await apiGetJson('/api/racks');
+    racks = Array.isArray(rk) ? rk : [];
+  } catch (_) { racks = []; }
+  const todayIso = getTodayDate();
   const yestIso = localISODate(addDays(new Date(), -1));
   let todayStats = { totalRevenue: 0, transactionCount: 0 };
   let yestStats = { totalRevenue: 0, transactionCount: 0 };
   try {
-    todayStats = await apiGetJson('/api/sales/stats?date=' + todayIso);
-    console.log('[ASPAS] GET /api/sales/stats?date=' + todayIso, todayStats);
+    todayStats = await apiGetJson('/api/sales/stats?date=' + encodeURIComponent(todayIso));
+    console.log('Stats Received:', todayStats);
   } catch (_) { /* ok */ }
   try {
-    yestStats = await apiGetJson('/api/sales/stats?date=' + yestIso);
-    console.log('[ASPAS] GET /api/sales/stats?date=' + yestIso, yestStats);
+    yestStats = await apiGetJson('/api/sales/stats?date=' + encodeURIComponent(yestIso));
   } catch (_) { /* ok */ }
-  const rev = Number(todayStats.totalRevenue) || 0;
-  const dy = Number(yestStats.totalRevenue) || 0;
-  const txToday = todayStats.transactionCount != null ? todayStats.transactionCount : 0;
-  const txYest = yestStats.transactionCount != null ? yestStats.transactionCount : 0;
+  const rev = Number(todayStats?.totalRevenue) || 0;
+  const dy = Number(yestStats?.totalRevenue) || 0;
+  const txToday = todayStats?.transactionCount != null ? Number(todayStats.transactionCount) : 0;
+  const txYest = yestStats?.transactionCount != null ? Number(yestStats.transactionCount) : 0;
 
   const kpiRoot = document.querySelector('#page-dashboard .kpi-grid');
   if (kpiRoot) {
@@ -2993,10 +3052,10 @@ async function refreshDashboard() {
 
   let txns = [];
   try {
-    txns = await apiGetJson('/api/sales/transactions/recent?limit=5');
-    console.log('[ASPAS] GET /api/sales/transactions/recent?limit=5', txns);
+    const tr = await apiGetJson('/api/sales/transactions/recent?limit=5');
+    txns = Array.isArray(tr) ? tr : [];
   } catch (_) { txns = []; }
-  txns = (txns || []).slice().sort((a, b) => {
+  txns = txns.slice().sort((a, b) => {
     const da = parseTxnDate(a), db = parseTxnDate(b);
     if (!da || !db) return 0;
     return db - da;
@@ -3026,7 +3085,7 @@ async function refreshDashboard() {
     const show = belowList.slice(0, 4);
     jitEl.innerHTML = show.map(p => {
       const b = (p.currentQuantity || 0) < (p.thresholdValue || 0);
-      const badge = b ? '<span class="badge badge-red">Reorder</span>' : '<span class="badge badge-orange">Watch</span>';
+      const badge = b ? '<span class="badge badge-red">Low Stock</span>' : '<span class="badge badge-orange">Watch</span>';
       return `
       <div class="activity-item">
         <div class="activity-body">
@@ -3060,7 +3119,7 @@ function renderPartsTable() {
         <td style="font-weight:600">${p.partName || ''}</td>
         <td class="text-mono">${stock}</td>
         <td class="text-mono">${thresh}</td>
-        <td>${below ? '<span class="badge badge-red">⚠ Below JIT</span>' : '<span class="badge badge-green">✓ OK</span>'}</td>
+        <td>${below ? '<span class="badge badge-red">Low Stock</span>' : '<span class="badge badge-green">Healthy</span>'}</td>
         <td class="text-mono">₹${Number(p.unitPrice||0).toLocaleString()}</td>
         <td><span class="badge badge-gray">${p.sizeCategory || ''}</span></td>
         <td class="text-mono color-dim">${rackLabel(p)}</td>
@@ -3137,7 +3196,7 @@ function renderJIT() {
         <td class="text-mono">${thresh}</td>
         <td class="text-mono">${thresh}</td>
         <td class="text-mono">${reorder > 0 ? `<span class="color-red">${reorder}</span>` : '<span class="color-dim">—</span>'}</td>
-        <td>${below ? '<span class="badge badge-red">Reorder</span>' : '<span class="badge badge-green">✓ Safe</span>'}</td>
+        <td>${below ? '<span class="badge badge-red">Low Stock</span>' : '<span class="badge badge-green">Healthy</span>'}</td>
       </tr>`;
   }).join('');
 }
@@ -3210,16 +3269,17 @@ document.getElementById('salePartSelect')?.addEventListener('change', function()
         <div style="color:var(--text3)">Unit Price</div><div class="text-mono">₹${Number(p.unitPrice||0).toLocaleString()}</div>
         <div style="color:var(--text3)">Size</div><div><span class="badge badge-gray">${p.sizeCategory || ''}</span></div>
         <div style="color:var(--text3)">Rack</div><div class="text-mono">${rackLabel(p)}</div>
-        <div style="color:var(--text3)">JIT Status</div><div>${stock < thresh ? '<span class="badge badge-red">Below JIT</span>' : '<span class="badge badge-green">OK</span>'}</div>
+        <div style="color:var(--text3)">JIT Status</div><div>${stock < thresh ? '<span class="badge badge-red">Low Stock</span>' : '<span class="badge badge-green">Healthy</span>'}</div>
       </div>
     </div>`;
 });
 
 async function loadTodayTransactions() {
-  const todayIso = localISODate(new Date());
+  const todayIso = getTodayDate();
   let txns = [];
   try {
-    txns = await apiGetJson('/api/sales/transactions?date=' + todayIso);
+    const raw = await apiGetJson('/api/sales/transactions?date=' + encodeURIComponent(todayIso));
+    txns = Array.isArray(raw) ? raw : [];
   } catch (_) { txns = []; }
   const tbody = document.getElementById('txnTableBody');
   if (!tbody) return;
@@ -3277,8 +3337,19 @@ function triggerEOD() {
 
 async function showOrderPrint(orderId) {
   try {
-    const content = await apiGetText('/api/orders/' + orderId + '/print');
-    document.getElementById('printPreviewContent').textContent = content;
+    let content = await apiGetText('/api/orders/' + orderId + '/print');
+    const o = Array.isArray(ordersCache) ? ordersCache.find(x => x.orderId === orderId) : null;
+    if (o && Array.isArray(o.items)) {
+      const extra = o.items
+        .filter(it => it && it.vendorAddress)
+        .map(it => `${it.partNumber || ''}: ${it.vendorAddress}`)
+        .join('\n');
+      if (extra) {
+        content = (content || '') + '\n\n— Vendor addresses (UC-05) —\n' + extra;
+      }
+    }
+    const pre = document.getElementById('printPreviewContent');
+    if (pre) pre.textContent = content || '';
     openModal('orderPrintModal');
   } catch (e) {
     showToast('Print load failed: ' + e.message, 'error');
@@ -3292,18 +3363,30 @@ function showOrderPrintSelected() {
 
 let ordersCache = [];
 
+/** UC-03: one backend row per vendor — surface vendor name for the list. */
+function orderVendorLabel(o) {
+  if (!o) return '—';
+  const items = Array.isArray(o.items) ? o.items : [];
+  const vn = items[0]?.vendorName;
+  if (vn) return vn;
+  if (o.vendorId != null) return 'Vendor #' + o.vendorId;
+  return '—';
+}
+
 function renderOrdersTableFromCache(emptyMsg) {
   const empty = emptyMsg || 'No orders yet.';
   const tbody = document.getElementById('ordersTableBody');
   if (!tbody) return;
-  tbody.innerHTML = (ordersCache || []).map(o => {
-    const n = o.totalItems != null ? o.totalItems : (o.items && o.items.length) || 0;
+  const list = Array.isArray(ordersCache) ? ordersCache : [];
+  tbody.innerHTML = list.map(o => {
+    const n = o.totalItems != null ? o.totalItems : ((Array.isArray(o.items) ? o.items.length : 0));
     const badgeClass = n === 0 ? 'badge-gray' : (n > 3 ? 'badge-red' : 'badge-orange');
     const st = o.isPrinted ? '<span class="badge badge-green">✓ Printed</span>' : '<span class="badge badge-blue">Pending</span>';
+    const vLabel = orderVendorLabel(o);
     return `<tr>
       <td class="text-mono">#${o.orderId}</td>
       <td class="text-mono text-xs">${o.orderDate || ''}</td>
-      <td><span class="badge ${badgeClass}">${n} parts</span></td>
+      <td><span class="badge ${badgeClass}">${n} line(s)</span><div class="text-mono text-xs color-dim" style="margin-top:4px">${vLabel}</div></td>
       <td>${st}</td>
       <td>
         <button type="button" class="btn btn-ghost btn-sm" onclick="selectOrderRow(${o.orderId})">Details</button>
@@ -3312,9 +3395,9 @@ function renderOrdersTableFromCache(emptyMsg) {
     </tr>`;
   }).join('') || `<tr><td colspan="5" style="padding:16px">${empty}</td></tr>`;
 
-  if (ordersCache && ordersCache.length) {
-    selectedOrderId = ordersCache[0].orderId;
-    renderOrderDetail(ordersCache[0]);
+  if (list.length) {
+    selectedOrderId = list[0].orderId;
+    renderOrderDetail(list[0]);
   } else {
     selectedOrderId = null;
     renderOrderDetail(null);
@@ -3322,7 +3405,12 @@ function renderOrdersTableFromCache(emptyMsg) {
 }
 
 async function loadOrders() {
-  ordersCache = await apiGetJson('/api/orders');
+  try {
+    const raw = await apiGetJson('/api/orders');
+    ordersCache = Array.isArray(raw) ? raw : [];
+  } catch (_) {
+    ordersCache = [];
+  }
   renderOrdersTableFromCache();
 }
 
@@ -3335,13 +3423,18 @@ async function applyOrderDateFilter() {
   }
   try {
     const o = await apiGetJsonOrNull('/api/orders/search?date=' + encodeURIComponent(d));
-    if (!o) {
+    if (o == null) {
       ordersCache = [];
       renderOrdersTableFromCache('No order for that date.');
       showToast('No order for ' + d, 'info');
       return;
     }
     ordersCache = Array.isArray(o) ? o : [o];
+    if (!ordersCache.length) {
+      renderOrdersTableFromCache('No orders for that date.');
+      showToast('No orders for ' + d, 'info');
+      return;
+    }
     renderOrdersTableFromCache();
   } catch (e) {
     showToast('Order search failed: ' + e.message, 'error');
@@ -3356,7 +3449,7 @@ async function clearOrderDateFilter() {
 
 function selectOrderRow(orderId) {
   selectedOrderId = orderId;
-  const o = ordersCache.find(x => x.orderId === orderId);
+  const o = Array.isArray(ordersCache) ? ordersCache.find(x => x.orderId === orderId) : null;
   renderOrderDetail(o);
 }
 
@@ -3369,13 +3462,13 @@ function renderOrderDetail(o) {
     itemsEl.innerHTML = '<div style="padding:16px;color:var(--text3)">No order data.</div>';
     return;
   }
-  title.textContent = `Order #${o.orderId} · Items`;
-  const items = o.items || [];
+  title.textContent = `Order #${o.orderId} · ${orderVendorLabel(o)}`;
+  const items = Array.isArray(o.items) ? o.items : [];
   itemsEl.innerHTML = items.map(it => `
     <div class="activity-item">
       <div class="activity-body">
         <div class="activity-title">${it.partNumber || ''} ${it.partName || ''}</div>
-        <div class="activity-meta">Qty: ${it.requiredQuantity || 0} · ${it.vendorName || ''}</div>
+        <div class="activity-meta">Qty: ${it.requiredQuantity || 0} · ${it.vendorName || '—'} · ${it.vendorAddress || '—'}</div>
       </div>
       <span class="badge badge-orange">${it.requiredQuantity || 0} units</span>
     </div>
@@ -3497,11 +3590,11 @@ function filterVendorCards(input) {
 
 async function loadReportsPage() {
   await loadParts();
-  const todayIso = localISODate(new Date());
+  const todayIso = getTodayDate();
   let daily = {};
   try {
-    daily = await apiGetJson('/api/reports/daily/' + todayIso);
-    console.log('[ASPAS] GET /api/reports/daily/' + todayIso, daily);
+    daily = await apiGetJson('/api/reports/daily/' + encodeURIComponent(todayIso)) || {};
+    console.log('[ASPAS] Daily report', todayIso, daily);
   } catch (_) { daily = {}; }
   lastDailyReport = daily;
 
@@ -3509,17 +3602,18 @@ async function loadReportsPage() {
   const m = new Date().getMonth() + 1;
   let monthly = {};
   try {
-    monthly = await apiGetJson(`/api/reports/monthly/${y}/${m}`);
-    console.log('[ASPAS] GET /api/reports/monthly/' + y + '/' + m, monthly);
+    monthly = await apiGetJson(`/api/reports/monthly/${y}/${m}`) || {};
+    console.log('[ASPAS] Monthly report', y, m, monthly);
   } catch (_) { monthly = {}; }
   lastMonthlyReport = monthly;
 
   const dGrid = document.querySelectorAll('#report-daily .kpi-grid .kpi-card');
-  if (dGrid[0]) dGrid[0].querySelector('.kpi-value').innerHTML = '<span class="unit">₹</span>' + Math.round(daily.totalRevenue || 0).toLocaleString();
-  if (dGrid[1]) dGrid[1].querySelector('.kpi-value').textContent = String(daily.transactionCount || 0);
-  const avg = (daily.transactionCount > 0) ? (daily.totalRevenue || 0) / daily.transactionCount : 0;
+  if (dGrid[0]) dGrid[0].querySelector('.kpi-value').innerHTML = '<span class="unit">₹</span>' + Math.round(Number(daily?.totalRevenue) || 0).toLocaleString();
+  if (dGrid[1]) dGrid[1].querySelector('.kpi-value').textContent = String(daily?.transactionCount ?? 0);
+  const tc = Number(daily?.transactionCount) || 0;
+  const avg = tc > 0 ? (Number(daily?.totalRevenue) || 0) / tc : 0;
   if (dGrid[2]) dGrid[2].querySelector('.kpi-value').innerHTML = '<span class="unit">₹</span>' + Math.round(avg).toLocaleString();
-  const tops = Array.isArray(daily.topSellingParts) ? daily.topSellingParts : [];
+  const tops = Array.isArray(daily?.topSellingParts) ? daily.topSellingParts : [];
   const top1 = tops[0];
   if (dGrid[3]) {
     dGrid[3].querySelector('.kpi-value').style.fontSize = '18px';
@@ -3530,33 +3624,35 @@ async function loadReportsPage() {
 
   let txns = [];
   try {
-    txns = await apiGetJson('/api/sales/transactions?date=' + todayIso);
+    const raw = await apiGetJson('/api/sales/transactions?date=' + encodeURIComponent(todayIso));
+    txns = Array.isArray(raw) ? raw : [];
   } catch (_) { txns = []; }
   let hourlyBuckets;
   let hourLabels;
-  if (Array.isArray(daily.hourlyDataPoints) && daily.hourlyDataPoints.length) {
-    const map = {};
-    daily.hourlyDataPoints.forEach(pt => {
-      if (pt && pt.hour != null) map[Number(pt.hour)] = Number(pt.revenue) || 0;
-    });
-    hourLabels = ['09','10','11','12','13','14','15'];
-    hourlyBuckets = hourLabels.map((_, i) => map[9 + i] || 0);
+  if (Array.isArray(daily?.hourlyDataPoints) && daily.hourlyDataPoints.length) {
+    const hb = hourlyBucketsFromReport(daily);
+    hourlyBuckets = hb.buckets;
+    hourLabels = hb.hourLabels;
   } else {
     const agg = aggregateHourlyFromTxns(txns);
     hourlyBuckets = agg.buckets;
     hourLabels = agg.HOURS;
   }
   renderHourlyChart(hourlyBuckets, hourLabels);
-  renderTopPartsList((daily.topSellingParts || []).map(tp => ({ partNumber: tp.partNumber, qtySold: tp.qtySold, revenue: tp.revenue })));
+  renderTopPartsList((daily?.topSellingParts || []).map(tp => ({
+    partNumber: tp?.partNumber,
+    qtySold: tp?.qtySold,
+    revenue: tp?.revenue
+  })));
 
   const mGrid = document.querySelectorAll('#report-monthly .kpi-grid .kpi-card');
-  if (mGrid[0]) mGrid[0].querySelector('.kpi-value').innerHTML = '<span class="unit">₹</span>' + Math.round(monthly.totalRevenue || 0).toLocaleString();
-  if (mGrid[1]) mGrid[1].querySelector('.kpi-value').innerHTML = '<span class="unit">₹</span>' + Math.round(monthly.averageDailyRevenue || 0).toLocaleString();
-  const dps = Array.isArray(monthly.dailyDataPoints) ? monthly.dailyDataPoints : [];
+  if (mGrid[0]) mGrid[0].querySelector('.kpi-value').innerHTML = '<span class="unit">₹</span>' + Math.round(Number(monthly?.totalRevenue) || 0).toLocaleString();
+  if (mGrid[1]) mGrid[1].querySelector('.kpi-value').innerHTML = '<span class="unit">₹</span>' + Math.round(Number(monthly?.averageDailyRevenue) || 0).toLocaleString();
+  const dps = Array.isArray(monthly?.dailyDataPoints) ? monthly.dailyDataPoints : [];
   let peakDay = null, peakRev = 0;
   dps.forEach(dp => {
     if (!dp) return;
-    const r = dp.revenue != null ? dp.revenue : 0;
+    const r = dp.revenue != null ? Number(dp.revenue) : 0;
     if (r > peakRev) { peakRev = r; peakDay = dp.day; }
   });
   if (mGrid[2]) {
@@ -3566,7 +3662,7 @@ async function loadReportsPage() {
   }
   if (mGrid[3]) {
     mGrid[3].querySelector('.kpi-value').style.fontSize = '16px';
-    mGrid[3].querySelector('.kpi-value').textContent = monthly.reportId || '—';
+    mGrid[3].querySelector('.kpi-value').textContent = monthly?.reportId || '—';
     const meta = mGrid[3].querySelector('.kpi-meta');
     if (meta) meta.textContent = `${y}${String(m).padStart(2,'0')}`;
   }
@@ -3576,7 +3672,7 @@ async function loadReportsPage() {
     const label = new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
     mt.innerHTML = `<div class="card-title-icon">📈</div> Monthly Revenue — ${label}`;
   }
-  renderMonthlyChart(Array.isArray(monthly.dailyDataPoints) ? monthly.dailyDataPoints : []);
+  renderMonthlyChart(Array.isArray(monthly?.dailyDataPoints) ? monthly.dailyDataPoints : []);
 }
 
 // =====================================================
@@ -3587,7 +3683,7 @@ function switchReport(type, btn) {
   btn.classList.add('active');
   document.getElementById('report-daily').style.display = type === 'daily' ? 'block' : 'none';
   document.getElementById('report-monthly').style.display = type === 'monthly' ? 'block' : 'none';
-  if (type === 'monthly') setTimeout(() => renderMonthlyChart((lastMonthlyReport && lastMonthlyReport.dailyDataPoints) || []), 50);
+  if (type === 'monthly') setTimeout(() => renderMonthlyChart(Array.isArray(lastMonthlyReport?.dailyDataPoints) ? lastMonthlyReport.dailyDataPoints : []), 50);
 }
 
 // =====================================================
@@ -3597,9 +3693,10 @@ async function recalcJIT() {
   showToast('↻ POST /api/jit/calculate ...', 'info');
   try {
     const res = await apiPostJson('/api/jit/calculate', {});
-    const n = res.partsUpdated != null ? res.partsUpdated : '?';
+    const n = res?.partsUpdated != null ? res.partsUpdated : '?';
     showToast(`✓ P2.0 — ${n} thresholds updated`, 'success');
     await loadParts();
+    if (document.getElementById('page-parts')?.classList.contains('active')) renderPartsTable();
     renderJitPageKpis();
     renderJIT();
     await refreshDashboard();

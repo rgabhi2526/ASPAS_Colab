@@ -163,4 +163,46 @@ public class InventoryService {
         part.setStorageRack(rack);
         return sparePartRepository.save(part);
     }
+
+    /**
+     * Load a managed {@link StorageRack} from {@code rackId} or {@code rackNumber} sent on the wire.
+     */
+    private StorageRack resolveStorageRack(StorageRack rack) {
+        if (rack == null) {
+            return null;
+        }
+        if (rack.getRackId() != null) {
+            return storageRackRepository.findById(rack.getRackId())
+                .orElseThrow(() -> new IllegalArgumentException("Rack not found: id=" + rack.getRackId()));
+        }
+        if (rack.getRackNumber() != null) {
+            return storageRackRepository.findByRackNumber(rack.getRackNumber())
+                .orElseThrow(() -> new IllegalArgumentException("Rack not found: #" + rack.getRackNumber()));
+        }
+        throw new IllegalArgumentException("Storage rack must include rackId or rackNumber");
+    }
+
+    /**
+     * Ensures total units on the rack (other parts + this part's proposed quantity) does not exceed {@code maxCapacity}.
+     *
+     * @param excludePartId part being updated/moved — its current row is excluded from the sum, then {@code proposedQuantity} is applied
+     */
+    private void assertRackHasCapacity(StorageRack rack, int proposedQuantity, Long excludePartId) {
+        if (rack == null) {
+            return;
+        }
+        StorageRack full = rack.getRackId() != null
+            ? storageRackRepository.findById(rack.getRackId())
+                .orElseThrow(() -> new IllegalArgumentException("Rack not found: id=" + rack.getRackId()))
+            : resolveStorageRack(rack);
+        int max = full.getMaxCapacity() != null ? full.getMaxCapacity() : 100;
+        long others = sparePartRepository.sumCurrentQuantityOnRackExcluding(full.getRackId(), excludePartId);
+        long total = others + (long) Math.max(0, proposedQuantity);
+        if (total > max) {
+            throw new IllegalArgumentException(String.format(
+                "Rack #%d exceeds capacity: %d units on rack + %d proposed > max %d",
+                full.getRackNumber(), others, proposedQuantity, max
+            ));
+        }
+    }
 }

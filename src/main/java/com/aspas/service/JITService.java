@@ -4,7 +4,7 @@ import com.aspas.config.BusinessDateBounds;
 import com.aspas.model.entity.SparePart;
 import com.aspas.repository.jpa.SparePartRepository;
 import com.aspas.repository.mongo.SalesTransactionRepository;
-import com.aspas.repository.mongo.SalesTransactionRepository.PartSalesAggregate;
+import com.aspas.repository.mongo.PartSalesAggregate;
 import com.aspas.util.JITCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
