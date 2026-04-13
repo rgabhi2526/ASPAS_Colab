@@ -1,5 +1,19 @@
 package com.aspas.exception;
 
+/**
+ * ================================================================
+ * VendorNotFoundException
+ * ================================================================
+ *
+ * Thrown when a vendor lookup fails.
+ *
+ * UML Traceability:
+ *   - Sequence Diagram: Message #19 "SC → V : getVendorAddress()"
+ *     If no vendor exists for a part in D3 Vendor Directory
+ *   - UC-04: Fetch Vendor Address
+ *
+ * ================================================================
+ */
 public class VendorNotFoundException extends RuntimeException {
 
     public VendorNotFoundException(Long vendorId) {

@@ -6,6 +6,21 @@ import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+/**
+ * ================================================================
+ * StorageRack Entity
+ * ================================================================
+ * 
+ * UML Traceability:
+ *   - Class Diagram: StorageRack class
+ *   - Relationship: SparePart *──1 StorageRack (stored in)
+ *   - Database: storage_racks table (MySQL)
+ * 
+ * Represents a physical wall-mounted numbered rack where
+ * spare parts are physically located.
+ * 
+ * ================================================================
+ */
 @Entity
 @Table(name = "storage_racks")
 @Data
@@ -45,6 +60,10 @@ public class StorageRack {
         updatedAt = LocalDateTime.now();
     }
 
+    /**
+     * Get rack information as formatted string.
+     * @return Rack details
+     */
     public String getRackInfo() {
         return String.format(
             "Rack #%d [%s] - Capacity: %d units",

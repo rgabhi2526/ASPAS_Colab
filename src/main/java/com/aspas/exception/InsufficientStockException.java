@@ -1,5 +1,19 @@
 package com.aspas.exception;
 
+/**
+ * ================================================================
+ * InsufficientStockException
+ * ================================================================
+ *
+ * Thrown when a sale request exceeds available stock.
+ *
+ * UML Traceability:
+ *   - Sequence Diagram: Message #4 "SC → SP : updateQuantity(-qty)"
+ *     If requested quantity > currentQuantity
+ *   - UC-01: Process Sale — validation before deducting
+ *
+ * ================================================================
+ */
 public class InsufficientStockException extends RuntimeException {
 
     private final String partNumber;

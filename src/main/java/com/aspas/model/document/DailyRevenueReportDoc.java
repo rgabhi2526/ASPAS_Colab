@@ -9,6 +9,26 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * ================================================================
+ * DailyRevenueReportDoc - MongoDB Document
+ * ================================================================
+ * 
+ * UML Traceability:
+ *   - Class Diagram: DailyRevenueReport (extends Report, implements Printable)
+ *   - Database: daily_revenue_reports collection (MongoDB)
+ *   - Sequence Diagram: Message #25 "<<create>> DailyRevenueReportDoc"
+ *   - Use Case: UC-07 View Daily Revenue Log
+ * 
+ * Aggregated daily report showing:
+ *   - Total revenue for the day
+ *   - Transaction count
+ *   - Top selling parts
+ * 
+ * Generated each day (can be manual or scheduled).
+ * 
+ * ================================================================
+ */
 @Document(collection = "daily_revenue_reports")
 @Data
 @NoArgsConstructor
@@ -17,23 +37,27 @@ import java.util.List;
 public class DailyRevenueReportDoc {
 
     @Id
-    private String id;  
+    private String id;  // MongoDB _id
 
-    private String reportId;            
+    private String reportId;            // Business key: RPT-DAILY-20260315
     
     @JsonFormat(pattern = "yyyy-MM-dd")
-    private LocalDate reportDate;       
+    private LocalDate reportDate;       // Date being reported on
     
     private String reportType = "DAILY";
 
-    private Double dailyTotal = 0.0;    
-    private Integer transactionCount = 0;  
+    private Double dailyTotal = 0.0;    // Total revenue for the day
+    private Integer transactionCount = 0;  // Number of sales
 
+    // Embedded list of top-selling parts
     private List<TopSellingPart> topSellingParts = new ArrayList<>();
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime generatedAt;  
+    private LocalDateTime generatedAt;  // When report was created
 
+    /**
+     * Constructor.
+     */
     public DailyRevenueReportDoc(String reportId, LocalDate reportDate) {
         this.reportId = reportId;
         this.reportDate = reportDate;
@@ -41,15 +65,30 @@ public class DailyRevenueReportDoc {
         this.generatedAt = LocalDateTime.now();
     }
 
+    /**
+     * Generate the report (calculate aggregates from sales data).
+     * 
+     * UML Traceability: Sequence Diagram → Message #28 "report.generate()"
+     * 
+     * This is called by ReportService after fetching transactions.
+     */
     public void generate() {
-        
+        // Service layer will populate data, then call this
         this.generatedAt = LocalDateTime.now();
     }
 
+    /**
+     * Get daily total revenue.
+     * @return total
+     */
     public Double getDailyTotal() {
         return dailyTotal != null ? dailyTotal : 0.0;
     }
 
+    /**
+     * Get report summary.
+     * @return summary string
+     */
     public String getReportSummary() {
         return String.format(
             "Daily Report [%s] | Date: %s | Revenue: ₹%.2f | Transactions: %d",
@@ -57,6 +96,9 @@ public class DailyRevenueReportDoc {
         );
     }
 
+    /**
+     * Embedded class for top-selling parts.
+     */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

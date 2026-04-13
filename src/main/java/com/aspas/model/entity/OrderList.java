@@ -10,6 +10,26 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * ================================================================
+ * OrderList Entity
+ * ================================================================
+ * 
+ * UML Traceability:
+ *   - Class Diagram: OrderList class
+ *   - Interface: Implements Printable
+ *   - Relationship: OrderList 1 *── OrderItem (Composition)
+ *   - Database: order_lists table (MySQL)
+ *   - Sequence Diagram: Message #15 "<<create>> OrderList"
+ * 
+ * Represents a daily end-of-day order list sent to vendors.
+ * Contains multiple OrderItems (one line per part-vendor combo).
+ * 
+ * Composition: OrderItems CANNOT exist without their parent OrderList.
+ * ON DELETE CASCADE ensures this relationship.
+ * 
+ * ================================================================
+ */
 @Entity
 @Table(name = "order_lists")
 @Data
@@ -26,6 +46,13 @@ public class OrderList implements Printable {
     @Column(nullable = false)
     private LocalDate orderDate;
 
+    /**
+     * Primary vendor for this order (one OrderList per vendor per day when items exist).
+     * Null when the list is an empty placeholder (no reorders).
+     */
+    @Column(name = "vendor_id")
+    private Long vendorId;
+
     @Column(nullable = false)
     private Integer totalItems = 0;
 
@@ -38,12 +65,13 @@ public class OrderList implements Printable {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // Composition: OrderItems are owned by OrderList (FK order_id on order_items)
     @OneToMany(
+        mappedBy = "orderList",
         cascade = CascadeType.ALL,
         orphanRemoval = true,
         fetch = FetchType.EAGER
     )
-    @JoinColumn(name = "order_id")
     private List<OrderItem> orderItems = new ArrayList<>();
 
     @PrePersist
@@ -51,20 +79,42 @@ public class OrderList implements Printable {
         createdAt = LocalDateTime.now();
     }
 
+    /**
+     * Add an order item (one line on the order).
+     * 
+     * UML Traceability: Sequence Diagram → Message #22
+     * 
+     * @param item OrderItem to add
+     */
     public void addOrderItem(OrderItem item) {
         orderItems.add(item);
+        item.setOrderList(this);
         totalItems = orderItems.size();
     }
 
+    /**
+     * Remove an order item.
+     */
     public void removeOrderItem(OrderItem item) {
         orderItems.remove(item);
+        item.setOrderList(null);
         totalItems = orderItems.size();
     }
 
+    /**
+     * Derived Attribute: /totalItems
+     * Always computed from the size of the orderItems list.
+     * 
+     * @return number of distinct order items
+     */
     public Integer getTotalItemsCount() {
         return orderItems.size();
     }
 
+    /**
+     * Get order summary (for API responses).
+     * @return summary string
+     */
     public String getOrderSummary() {
         return String.format(
             "Order #%d | Date: %s | Total Items: %d | Printed: %s",
@@ -72,6 +122,15 @@ public class OrderList implements Printable {
         );
     }
 
+    /**
+     * Format output as print-ready text.
+     * 
+     * UML Traceability: 
+     *   - Implements Printable interface
+     *   - Sequence Diagram → Message #23 "OL.print()"
+     * 
+     * @return formatted order text
+     */
     @Override
     public String formatOutput() {
         StringBuilder output = new StringBuilder();
@@ -107,6 +166,14 @@ public class OrderList implements Printable {
         return output.toString();
     }
 
+    /**
+     * Print the order list.
+     * 
+     * UML Traceability: Implements Printable interface
+     * 
+     * Backend: stores print text for later retrieval
+     * (No actual printer integration in this phase)
+     */
     @Override
     public void print() {
         this.printText = formatOutput();

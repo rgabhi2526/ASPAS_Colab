@@ -4,6 +4,22 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.SchedulingConfigurer;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
+
+/**
+ * ================================================================
+ * Scheduler Configuration
+ * ================================================================
+ * 
+ * UML Traceability:
+ *   - Use Case Diagram : System Clock actor
+ *   - Sequence Diagram : Message #9 "Clock → SC : triggerEndOfDayOrder()"
+ * 
+ * This configures the thread pool that runs:
+ *   1. End-of-Day order generation (11:55 PM daily)
+ *   2. JIT threshold recalculation (triggered within EOD flow)
+ * 
+ * ================================================================
+ */
 @Configuration
 public class SchedulerConfig implements SchedulingConfigurer {
 

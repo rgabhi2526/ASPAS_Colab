@@ -1,0 +1,3794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASPAS — Automobile Spare Parts Automation System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0b0e;
+  --surface: #111318;
+  --surface2: #181c24;
+  --surface3: #1e2330;
+  --border: #252a38;
+  --border2: #2e3548;
+  --accent: #e8622a;
+  --accent2: #f0893d;
+  --accent-glow: rgba(232,98,42,0.18);
+  --gold: #c9a84c;
+  --gold-light: #e8c96b;
+  --green: #27c97a;
+  --green-dim: rgba(39,201,122,0.15);
+  --red: #e84242;
+  --red-dim: rgba(232,66,66,0.15);
+  --blue: #4a9eff;
+  --blue-dim: rgba(74,158,255,0.12);
+  --text: #e8eaf0;
+  --text2: #8b92a8;
+  --text3: #555e75;
+  --mono: 'DM Mono', monospace;
+  --head: 'Syne', sans-serif;
+  --serif: 'Instrument Serif', serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--head);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Noise texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+}
+
+/* === LAYOUT === */
+.app {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* === SIDEBAR === */
+.sidebar {
+  width: 260px;
+  min-height: 100vh;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  z-index: 100;
+  transition: transform 0.3s ease;
+}
+
+.sidebar-logo {
+  padding: 28px 24px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.logo-icon {
+  width: 36px; height: 36px;
+  background: var(--accent);
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.logo-icon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 60%);
+}
+
+.logo-name {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+
+.logo-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 16px 12px;
+  overflow-y: auto;
+}
+
+.nav-section-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 12px 12px 6px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--text2);
+  font-size: 13.5px;
+  font-weight: 500;
+  position: relative;
+  margin-bottom: 2px;
+  border: 1px solid transparent;
+}
+
+.nav-item:hover {
+  background: var(--surface2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.nav-item.active {
+  background: var(--accent-glow);
+  color: var(--accent2);
+  border-color: rgba(232,98,42,0.3);
+}
+
+.nav-item.active .nav-icon { color: var(--accent); }
+
+.nav-icon {
+  width: 18px;
+  text-align: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.nav-badge {
+  margin-left: auto;
+  background: var(--red);
+  color: white;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.nav-badge.green { background: var(--green); color: #000; }
+
+.sidebar-footer {
+  padding: 16px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface2);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 2s infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(39,201,122,0.4); }
+  50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(39,201,122,0); }
+}
+
+.status-text {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text2);
+}
+
+.status-text strong { color: var(--green); }
+
+/* === MAIN === */
+.main {
+  margin-left: 260px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* === TOPBAR === */
+.topbar {
+  height: 60px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.topbar-breadcrumb {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: 0.05em;
+}
+
+.topbar-breadcrumb span { color: var(--text2); }
+
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar-time {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text3);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-family: var(--head);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.btn-primary:hover {
+  background: var(--accent2);
+  box-shadow: 0 0 20px rgba(232,98,42,0.35);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+  border-color: var(--border);
+}
+
+.btn-ghost:hover {
+  background: var(--surface2);
+  color: var(--text);
+  border-color: var(--border2);
+}
+
+.btn-sm { padding: 6px 10px; font-size: 11px; }
+
+.btn-danger {
+  background: rgba(232,66,66,0.15);
+  color: var(--red);
+  border-color: rgba(232,66,66,0.3);
+}
+
+.btn-danger:hover { background: rgba(232,66,66,0.25); }
+
+.btn-success {
+  background: var(--green-dim);
+  color: var(--green);
+  border-color: rgba(39,201,122,0.3);
+}
+
+.btn-success:hover { background: rgba(39,201,122,0.25); }
+
+/* === CONTENT AREA === */
+.content {
+  padding: 28px;
+  flex: 1;
+}
+
+.page { display: none; animation: fadeIn 0.25s ease; }
+.page.active { display: block; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* === PAGE HEADER === */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  gap: 16px;
+}
+
+.page-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  line-height: 1.1;
+}
+
+.page-title em {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--accent2);
+}
+
+.page-subtitle {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* === KPI GRID === */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.kpi-card:hover { border-color: var(--border2); }
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--kpi-color, var(--accent));
+}
+
+.kpi-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 10px;
+}
+
+.kpi-value {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  line-height: 1;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.kpi-value .unit {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text3);
+  vertical-align: super;
+}
+
+.kpi-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.kpi-up { color: var(--green); }
+.kpi-down { color: var(--red); }
+.kpi-neutral { color: var(--text3); }
+
+.kpi-icon {
+  position: absolute;
+  right: 16px; top: 16px;
+  font-size: 28px;
+  opacity: 0.12;
+}
+
+/* === GRID LAYOUTS === */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.grid-65-35 { display: grid; grid-template-columns: 1.8fr 1fr; gap: 16px; }
+
+/* === CARD === */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.card-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title-icon {
+  width: 24px; height: 24px;
+  background: var(--surface2);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  border: 1px solid var(--border);
+}
+
+.card-body { padding: 20px; }
+.card-body-np { }
+
+/* === TABLE === */
+.table-wrap { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+thead th {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-weight: 500;
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s ease;
+}
+
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--surface2); }
+
+tbody td {
+  padding: 12px 16px;
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.part-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent2);
+  background: var(--accent-glow);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(232,98,42,0.2);
+  display: inline-block;
+}
+
+/* === BADGES === */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.badge-green { background: var(--green-dim); color: var(--green); border: 1px solid rgba(39,201,122,0.25); }
+.badge-red { background: var(--red-dim); color: var(--red); border: 1px solid rgba(232,66,66,0.25); }
+.badge-orange { background: var(--accent-glow); color: var(--accent2); border: 1px solid rgba(232,98,42,0.25); }
+.badge-blue { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(74,158,255,0.25); }
+.badge-gold { background: rgba(201,168,76,0.12); color: var(--gold-light); border: 1px solid rgba(201,168,76,0.25); }
+.badge-gray { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+
+/* === PROGRESS BAR === */
+.progress-wrap {
+  background: var(--surface2);
+  border-radius: 4px;
+  height: 5px;
+  overflow: hidden;
+  width: 80px;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+  transition: width 0.5s ease;
+}
+
+.progress-bar.green { background: var(--green); }
+.progress-bar.red { background: var(--red); }
+
+/* === CHART === */
+.chart-container {
+  position: relative;
+  padding: 16px 20px;
+}
+
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 140px;
+}
+
+.bar-group { display: flex; flex-direction: column; align-items: center; flex: 1; gap: 4px; }
+
+.bar {
+  width: 100%;
+  background: var(--accent);
+  border-radius: 4px 4px 0 0;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  cursor: pointer;
+  min-width: 12px;
+}
+
+.bar:hover { background: var(--accent2); }
+.bar.secondary { background: var(--surface3); }
+.bar.secondary:hover { background: var(--border2); }
+
+.bar-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text3);
+  white-space: nowrap;
+  text-align: center;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+}
+
+.legend-dot {
+  width: 8px; height: 8px;
+  border-radius: 2px;
+}
+
+/* === SPARKLINE === */
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 32px;
+}
+
+.spark-bar {
+  flex: 1;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+  opacity: 0.7;
+  min-height: 4px;
+}
+
+/* === ACTIVITY FEED === */
+.activity-list { }
+
+.activity-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s ease;
+}
+
+.activity-item:last-child { border-bottom: none; }
+.activity-item:hover { background: var(--surface2); }
+
+.activity-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.activity-body { flex: 1; min-width: 0; }
+
+.activity-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.activity-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+}
+
+.activity-amount {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+  flex-shrink: 0;
+}
+
+/* === FORM ELEMENTS === */
+.form-group { margin-bottom: 16px; }
+
+.form-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 7px;
+}
+
+.form-input, .form-select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 13px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  transition: all 0.15s ease;
+  outline: none;
+  appearance: none;
+}
+
+.form-input:focus, .form-select:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.form-input::placeholder { color: var(--text3); }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* === MODAL === */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10,11,14,0.85);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: none;
+  place-items: center;
+}
+
+.modal-overlay.active { display: grid; }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  width: 520px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: modalIn 0.2s cubic-bezier(0.34,1.56,0.64,1);
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.94) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.modal-close {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+
+.modal-close:hover { background: var(--surface3); color: var(--text); }
+
+.modal-body { padding: 24px; }
+
+.modal-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+}
+
+/* === SEARCH BAR === */
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  transition: all 0.15s;
+}
+
+.search-bar:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.search-bar input {
+  background: none;
+  border: none;
+  outline: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  width: 200px;
+}
+
+.search-bar input::placeholder { color: var(--text3); }
+
+.search-icon { color: var(--text3); font-size: 13px; }
+
+/* === TOAST === */
+.toast-container {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  min-width: 280px;
+  animation: toastIn 0.25s cubic-bezier(0.34,1.56,0.64,1);
+  border-left: 3px solid var(--toast-color, var(--accent));
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* === INLINE CHART BARS === */
+.mini-chart {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+}
+
+.mini-bar {
+  width: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+/* === JIT STATUS === */
+.jit-strip {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+  padding: 16px 20px;
+}
+
+.jit-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 8px 4px;
+  border-radius: 8px;
+  transition: background 0.15s;
+  border: 1px solid transparent;
+}
+
+.jit-item:hover { background: var(--surface2); border-color: var(--border); }
+
+.jit-circle {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  position: relative;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.jit-circle svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.jit-label {
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--text3);
+  text-align: center;
+  max-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* === DONUT CHART === */
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 20px;
+}
+
+.donut-labels { flex: 1; }
+.donut-label-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.donut-color { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.donut-item-label { color: var(--text2); flex: 1; font-size: 11px; }
+.donut-item-val { font-family: var(--mono); font-size: 11px; color: var(--text); }
+
+/* === ORDER PRINT PREVIEW === */
+.print-preview {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.7;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* === ALERT === */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  font-size: 12.5px;
+  border: 1px solid;
+}
+
+.alert-warning {
+  background: rgba(232,98,42,0.08);
+  border-color: rgba(232,98,42,0.3);
+  color: var(--accent2);
+}
+
+.alert-icon { font-size: 16px; flex-shrink: 0; }
+
+/* === SCHEDULE TIMELINE === */
+.timeline {
+  position: relative;
+  padding-left: 24px;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px; top: 0; bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -20px; top: 4px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+}
+
+.timeline-dot.done { background: var(--green); }
+.timeline-dot.pending { background: var(--text3); }
+
+.timeline-time {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--text3);
+  margin-bottom: 3px;
+  letter-spacing: 0.05em;
+}
+
+.timeline-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.timeline-desc {
+  font-size: 11.5px;
+  color: var(--text3);
+}
+
+/* === TOOLTIP === */
+[data-tooltip] {
+  position: relative;
+  cursor: help;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  z-index: 100;
+}
+
+[data-tooltip]:hover::after { opacity: 1; }
+
+/* === VENDOR CARD === */
+.vendor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.vendor-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  transition: border-color 0.15s, transform 0.15s;
+  cursor: pointer;
+}
+
+.vendor-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+
+.vendor-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vendor-flag {
+  font-size: 16px;
+}
+
+.vendor-addr {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.vendor-parts-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text2);
+}
+
+/* === EMPTY STATE === */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--text3);
+  gap: 8px;
+}
+
+.empty-state-icon { font-size: 36px; opacity: 0.4; margin-bottom: 8px; }
+.empty-state-text { font-size: 13px; }
+.empty-state-sub { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+
+/* === DIVIDER === */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
+/* === MISC === */
+.text-mono { font-family: var(--mono); }
+.text-sm { font-size: 11px; }
+.text-xs { font-size: 10px; }
+.text-right { text-align: right; }
+.color-green { color: var(--green); }
+.color-red { color: var(--red); }
+.color-accent { color: var(--accent2); }
+.color-dim { color: var(--text3); }
+.flex { display: flex; }
+.flex-center { display: flex; align-items: center; }
+.gap-8 { gap: 8px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-24 { margin-bottom: 24px; }
+.mt-16 { margin-top: 16px; }
+.w-full { width: 100%; }
+
+/* === SCROLLBAR === */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+/* === SPINNING LOADER === */
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* === TOGGLE === */
+.toggle-group {
+  display: flex;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.toggle-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--text2);
+  transition: all 0.15s;
+  border: none;
+  background: none;
+}
+
+.toggle-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border2);
+}
+
+/* Mobile collapse */
+@media (max-width: 1100px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .grid-65-35 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 800px) {
+  .sidebar { transform: translateX(-100%); }
+  .main { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-badge">
+        <div class="logo-icon">⚙</div>
+        <div class="logo-name">ASPAS</div>
+      </div>
+      <div class="logo-sub">Spare Parts Automation System</div>
+    </div>
+
+    <div class="sidebar-nav">
+      <div class="nav-section-label">Overview</div>
+      <div class="nav-item active" onclick="navigate('dashboard')">
+        <span class="nav-icon">◈</span> Dashboard
+      </div>
+
+      <div class="nav-section-label">Operations</div>
+      <div class="nav-item" onclick="navigate('sales')">
+        <span class="nav-icon">⚡</span> Process Sale
+      </div>
+      <div class="nav-item" onclick="navigate('orders')">
+        <span class="nav-icon">📋</span> Order Lists
+        <span class="nav-badge">3</span>
+      </div>
+
+      <div class="nav-section-label">Inventory</div>
+      <div class="nav-item" onclick="navigate('parts')">
+        <span class="nav-icon">🔧</span> Spare Parts
+      </div>
+      <div class="nav-item" onclick="navigate('jit')">
+        <span class="nav-icon">◉</span> JIT Thresholds
+        <span class="nav-badge red">4</span>
+      </div>
+      <div class="nav-item" onclick="navigate('racks')">
+        <span class="nav-icon">▦</span> Storage Racks
+      </div>
+
+      <div class="nav-section-label">Suppliers</div>
+      <div class="nav-item" onclick="navigate('vendors')">
+        <span class="nav-icon">🏭</span> Vendors
+      </div>
+
+      <div class="nav-section-label">Analytics</div>
+      <div class="nav-item" onclick="navigate('reports')">
+        <span class="nav-icon">◉</span> Reports
+      </div>
+      <div class="nav-item" onclick="navigate('scheduler')">
+        <span class="nav-icon">🕐</span> Scheduler
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="status-indicator">
+        <div class="status-dot"></div>
+        <div class="status-text">API <strong>Online</strong> · :8080</div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div class="topbar-breadcrumb" id="breadcrumb">
+        ASPAS / <span>Dashboard</span>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-time" id="clock">--:--:--</div>
+        <button class="btn btn-ghost btn-sm" onclick="showToast('Refreshing data...', 'info')">↻ Refresh</button>
+        <button class="btn btn-primary btn-sm" onclick="prepareSaleModal()">+ New Sale</button>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- ==============================
+           DASHBOARD PAGE
+      ============================== -->
+      <div id="page-dashboard" class="page active">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Inventory <em>Overview</em></div>
+            <div class="page-subtitle">DFD Processes P1.0 – P4.0 · Real-time Status</div>
+          </div>
+          <div class="flex gap-8">
+            <button class="btn btn-ghost btn-sm" onclick="navigate('reports')">↗ Analytics</button>
+            <button class="btn btn-primary btn-sm" onclick="triggerEOD()">⚡ Run EOD Process</button>
+          </div>
+        </div>
+
+        <!-- KPI Grid -->
+        <div class="kpi-grid">
+          <div class="kpi-card" style="--kpi-color: var(--accent)">
+            <div class="kpi-label">Total Parts</div>
+            <div class="kpi-value">10</div>
+            <div class="kpi-meta kpi-neutral">
+              <span>▪</span><span>Across 5 racks</span>
+            </div>
+            <div class="kpi-icon">🔧</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color: var(--red)">
+            <div class="kpi-label">Below JIT Threshold</div>
+            <div class="kpi-value" style="color:var(--red)">4</div>
+            <div class="kpi-meta kpi-down">
+              <span>↑</span><span>Needs reorder today</span>
+            </div>
+            <div class="kpi-icon">⚠</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color: var(--green)">
+            <div class="kpi-label">Today's Revenue</div>
+            <div class="kpi-value"><span class="unit">₹</span>84,250</div>
+            <div class="kpi-meta kpi-up">
+              <span>↑ 12.4%</span><span class="color-dim">vs yesterday</span>
+            </div>
+            <div class="kpi-icon">₹</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color: var(--blue)">
+            <div class="kpi-label">Transactions Today</div>
+            <div class="kpi-value">38</div>
+            <div class="kpi-meta kpi-up">
+              <span>↑ 5</span><span class="color-dim">vs yesterday</span>
+            </div>
+            <div class="kpi-icon">⚡</div>
+          </div>
+        </div>
+
+        <!-- Row 1 -->
+        <div class="grid-65-35 mb-24">
+          <!-- Revenue Chart -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">📈</div>
+                Weekly Revenue
+              </div>
+              <div class="toggle-group">
+                <button class="toggle-btn active">7D</button>
+                <button class="toggle-btn">30D</button>
+                <button class="toggle-btn">90D</button>
+              </div>
+            </div>
+            <div class="chart-container">
+              <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:8px;">
+                ₹ Revenue (INR)
+              </div>
+              <div class="bar-chart" id="revenueChart"></div>
+              <div class="chart-legend">
+                <div class="legend-item">
+                  <div class="legend-dot" style="background:var(--accent)"></div>
+                  Revenue
+                </div>
+                <div class="legend-item">
+                  <div class="legend-dot" style="background:var(--surface3)"></div>
+                  Prev. Week
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stock Distribution -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">▦</div>
+                Stock by Category
+              </div>
+            </div>
+            <div class="donut-wrap">
+              <svg width="100" height="100" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="38" fill="none" stroke="var(--surface2)" stroke-width="14"/>
+                <circle cx="50" cy="50" r="38" fill="none" stroke="var(--accent)" stroke-width="14"
+                  stroke-dasharray="95 144" stroke-dashoffset="36" stroke-linecap="round"/>
+                <circle cx="50" cy="50" r="38" fill="none" stroke="var(--blue)" stroke-width="14"
+                  stroke-dasharray="60 179" stroke-dashoffset="-59" stroke-linecap="round"/>
+                <circle cx="50" cy="50" r="38" fill="none" stroke="var(--green)" stroke-width="14"
+                  stroke-dasharray="44 195" stroke-dashoffset="-119" stroke-linecap="round"/>
+              </svg>
+              <div class="donut-labels">
+                <div class="donut-label-item">
+                  <div class="donut-color" style="background:var(--accent)"></div>
+                  <div class="donut-item-label">Small Parts</div>
+                  <div class="donut-item-val">40%</div>
+                </div>
+                <div class="donut-label-item">
+                  <div class="donut-color" style="background:var(--blue)"></div>
+                  <div class="donut-item-label">Medium</div>
+                  <div class="donut-item-val">25%</div>
+                </div>
+                <div class="donut-label-item">
+                  <div class="donut-color" style="background:var(--green)"></div>
+                  <div class="donut-item-label">Large Parts</div>
+                  <div class="donut-item-val">35%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2 -->
+        <div class="grid-65-35">
+          <!-- Recent Activity -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">⚡</div>
+                Recent Transactions
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="navigate('sales')">View All</button>
+            </div>
+            <div class="activity-list" id="dashboardRecentTxns"></div>
+          </div>
+
+          <!-- JIT Alerts -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">⚠</div>
+                JIT Alerts
+              </div>
+              <span class="badge badge-red" id="dashboardJitBadge">—</span>
+            </div>
+            <div class="card-body-np">
+              <div id="dashboardJitAlerts"></div>
+              <div style="padding:14px 20px;border-top:1px solid var(--border)">
+                <button class="btn btn-danger w-full" onclick="navigate('jit')">
+                  View JIT Thresholds →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================
+           SALES PAGE
+      ============================== -->
+      <div id="page-sales" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Process <em>Sales</em></div>
+            <div class="page-subtitle">UC-01 · DFD Process P1.0 · Seq Messages #1–#8</div>
+          </div>
+          <button class="btn btn-primary" onclick="prepareSaleModal()">+ New Sale</button>
+        </div>
+
+        <!-- Sale Form Card -->
+        <div class="grid-65-35 mb-24">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">⚡</div>
+                Quick Sale Entry
+              </div>
+              <span class="badge badge-blue">P1.0</span>
+            </div>
+            <div class="card-body">
+              <div class="alert alert-warning">
+                <div class="alert-icon">⚡</div>
+                <div>Sale processing deducts stock from MySQL D1 and logs transaction to MongoDB D2 simultaneously.</div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Part Number</label>
+                  <select class="form-select" id="salePartSelect">
+                    <option value="">Select part...</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Quantity</label>
+                  <input class="form-input" type="number" id="saleQty" min="1" value="1" placeholder="1">
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:8px;">
+                <button class="btn btn-primary" style="flex:1" onclick="processSale()">
+                  ⚡ Process Sale
+                </button>
+                <button class="btn btn-ghost" onclick="clearSaleForm()">Clear</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sale Preview -->
+          <div class="card" id="saleSummaryCard">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">📄</div>
+                Transaction Preview
+              </div>
+            </div>
+            <div class="card-body">
+              <div id="salePreview" style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:20px 0">
+                Select a part to preview transaction details
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Transactions Table -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon">📊</div>
+              Today's Transactions (D2 Sales Log — MongoDB)
+            </div>
+            <div class="search-bar">
+              <span class="search-icon">🔍</span>
+              <input type="text" placeholder="Search transactions..." oninput="filterTable(this,'txnTable')">
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="txnTable">
+              <thead>
+                <tr>
+                  <th>Transaction ID</th>
+                  <th>Part</th>
+                  <th>Qty</th>
+                  <th>Unit Price</th>
+                  <th>Revenue</th>
+                  <th>Time</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="txnTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================
+           ORDERS PAGE
+      ============================== -->
+      <div id="page-orders" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Order <em>Lists</em></div>
+            <div class="page-subtitle">UC-03 · DFD Process P3.0 · End-of-Day Orders</div>
+          </div>
+          <button class="btn btn-primary" onclick="generateOrder()">⚡ Generate EOD Order</button>
+        </div>
+
+        <div class="alert alert-warning mb-24">
+          <div class="alert-icon">🕐</div>
+          <div>Next automated order generation scheduled at <strong>23:55 today</strong> via System Clock actor (EndOfDayScheduler.java). Manual trigger available above.</div>
+        </div>
+
+        <div class="grid-65-35">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">📋</div>
+                Order History
+              </div>
+              <div class="flex gap-8" style="align-items:center;flex-wrap:wrap">
+                <input type="date" class="form-input" id="orderDateFilter" style="max-width:160px">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="applyOrderDateFilter()">Filter by date</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="clearOrderDateFilter()">Show all</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Order ID</th>
+                    <th>Date</th>
+                    <th>Items</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="ordersTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Order Items Detail -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">📄</div>
+                <span id="orderDetailTitle">Order — Items</span>
+              </div>
+            </div>
+            <div class="card-body-np">
+              <div id="orderDetailItems"></div>
+              <div style="padding:12px 20px;border-top:1px solid var(--border)">
+                <button class="btn btn-ghost w-full btn-sm" id="orderDetailPrintBtn" onclick="showOrderPrintSelected()">
+                  View Print Preview
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================
+           PARTS PAGE
+      ============================== -->
+      <div id="page-parts" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Spare <em>Parts</em></div>
+            <div class="page-subtitle">D1 Inventory File · MySQL · UC-01 / UC-06</div>
+          </div>
+          <div class="flex gap-8">
+            <div class="search-bar">
+              <span class="search-icon">🔍</span>
+              <input type="text" placeholder="Search parts..." oninput="filterTable(this,'partsTable')">
+            </div>
+            <button class="btn btn-primary" onclick="prepareAddPartModal()">+ Add Part</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table id="partsTable">
+              <thead>
+                <tr>
+                  <th>Part #</th>
+                  <th>Name</th>
+                  <th>Stock</th>
+                  <th>Threshold</th>
+                  <th>Status</th>
+                  <th>Unit Price</th>
+                  <th>Size</th>
+                  <th>Rack</th>
+                  <th>Stock Level</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="partsTableBody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================
+           JIT PAGE
+      ============================== -->
+      <div id="page-jit" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">JIT <em>Thresholds</em></div>
+            <div class="page-subtitle">UC-02 · DFD Process P2.0 · Activity Diagram — Full Loop</div>
+          </div>
+          <button class="btn btn-primary" onclick="recalcJIT()">↻ Recalculate All Thresholds</button>
+        </div>
+
+        <div class="kpi-grid mb-24">
+          <div class="kpi-card" style="--kpi-color:var(--green)">
+            <div class="kpi-label">Above Threshold</div>
+            <div class="kpi-value" style="color:var(--green)">6</div>
+            <div class="kpi-meta kpi-neutral">Parts in safe zone</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color:var(--red)">
+            <div class="kpi-label">Below Threshold</div>
+            <div class="kpi-value" style="color:var(--red)">4</div>
+            <div class="kpi-meta kpi-down">Requires reorder today</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color:var(--accent)">
+            <div class="kpi-label">Threshold Policy</div>
+            <div class="kpi-value" style="font-size:20px;letter-spacing:0">7-Day</div>
+            <div class="kpi-meta kpi-neutral">Rolling sales average</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color:var(--blue)">
+            <div class="kpi-label">Last Calculated</div>
+            <div class="kpi-value" style="font-size:20px;letter-spacing:0">23:55</div>
+            <div class="kpi-meta kpi-neutral">Yesterday EOD</div>
+          </div>
+        </div>
+
+        <!-- JIT Circles -->
+        <div class="card mb-24">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon">◉</div>
+              Stock vs Threshold — All Parts
+            </div>
+            <span class="badge badge-blue text-mono text-xs">threshold = Σ(last 7d sales)</span>
+          </div>
+          <div class="jit-strip" id="jitCircles"></div>
+        </div>
+
+        <!-- JIT Table -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon">📊</div>
+              Threshold Detail Table
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Part #</th>
+                  <th>Name</th>
+                  <th>Current Stock</th>
+                  <th>JIT Threshold</th>
+                  <th>7-Day Sales</th>
+                  <th>Reorder Qty</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="jitTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================
+           RACKS PAGE
+      ============================== -->
+      <div id="page-racks" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Storage <em>Racks</em></div>
+            <div class="page-subtitle">Physical Inventory Layout · MySQL · StorageRack Entity</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('addRackModal')">+ Add Rack</button>
+        </div>
+
+        <div class="grid-3 mb-24">
+          <div class="kpi-card" style="--kpi-color:var(--accent)">
+            <div class="kpi-label">Total Racks</div>
+            <div class="kpi-value">5</div>
+            <div class="kpi-meta kpi-neutral">Wall-mounted racks</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color:var(--blue)">
+            <div class="kpi-label">Total Capacity</div>
+            <div class="kpi-value">325</div>
+            <div class="kpi-meta kpi-neutral">Combined max units</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color:var(--green)">
+            <div class="kpi-label">Units on racks</div>
+            <div class="kpi-value">10</div>
+            <div class="kpi-meta kpi-up">Sum of stock by rack_id</div>
+          </div>
+        </div>
+
+        <div class="grid-3" id="racksCardGrid"></div>
+      </div>
+
+      <!-- ==============================
+           VENDORS PAGE
+      ============================== -->
+      <div id="page-vendors" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Vendor <em>Directory</em></div>
+            <div class="page-subtitle">D3 Vendor Directory · MySQL · UC-04 Fetch Vendor Address</div>
+          </div>
+          <button class="btn btn-primary" onclick="prepareAddVendorModal()">+ Add Vendor</button>
+        </div>
+
+        <div class="grid-65-35">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">🏭</div>
+                <span id="vendorsCardTitle">All Vendors</span>
+              </div>
+              <div class="search-bar">
+                <span class="search-icon">🔍</span>
+                <input type="text" placeholder="Search vendors..." id="vendorSearchInput" oninput="filterVendorCards(this)">
+              </div>
+            </div>
+            <div class="vendor-grid" id="vendorGrid"></div>
+          </div>
+
+          <!-- Part-Vendor Mapping -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">🔗</div>
+                Part→Vendor Mapping
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Part</th>
+                    <th>Vendor</th>
+                    <th>Type</th>
+                  </tr>
+                </thead>
+                <tbody id="vendorMapTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================
+           REPORTS PAGE
+      ============================== -->
+      <div id="page-reports" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Analytical <em>Reports</em></div>
+            <div class="page-subtitle">UC-05 / UC-07 / UC-08 · DFD Process P4.0 · D2 Sales Log</div>
+          </div>
+          <div class="toggle-group">
+            <button class="toggle-btn active" onclick="switchReport('daily', this)">Daily Revenue</button>
+            <button class="toggle-btn" onclick="switchReport('monthly', this)">Monthly Graph</button>
+          </div>
+        </div>
+
+        <!-- Daily Report -->
+        <div id="report-daily">
+          <div class="kpi-grid mb-24">
+            <div class="kpi-card" style="--kpi-color:var(--green)">
+              <div class="kpi-label">Today Revenue</div>
+              <div class="kpi-value"><span class="unit">₹</span>84,250</div>
+              <div class="kpi-meta kpi-up">↑ 12.4% vs yesterday</div>
+            </div>
+            <div class="kpi-card" style="--kpi-color:var(--blue)">
+              <div class="kpi-label">Transactions</div>
+              <div class="kpi-value">38</div>
+              <div class="kpi-meta kpi-up">↑ 5 vs yesterday</div>
+            </div>
+            <div class="kpi-card" style="--kpi-color:var(--accent)">
+              <div class="kpi-label">Avg. Transaction</div>
+              <div class="kpi-value"><span class="unit">₹</span>2,217</div>
+              <div class="kpi-meta kpi-neutral">Per sale today</div>
+            </div>
+            <div class="kpi-card" style="--kpi-color:var(--gold)">
+              <div class="kpi-label">Top Seller</div>
+              <div class="kpi-value" style="font-size:18px;letter-spacing:0">SP-ENG-001</div>
+              <div class="kpi-meta kpi-neutral">12 units sold</div>
+            </div>
+          </div>
+
+          <div class="grid-65-35">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><div class="card-title-icon">📊</div> Hourly Revenue — Today</div>
+                <span class="badge badge-blue text-mono">UC-07 Daily Revenue Log</span>
+              </div>
+              <div class="chart-container">
+                <div class="bar-chart" id="hourlyChart" style="height:180px"></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><div class="card-title-icon">🏆</div> Top Selling Parts</div>
+              </div>
+              <div class="card-body">
+                <div id="topPartsList"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Monthly Report -->
+        <div id="report-monthly" style="display:none">
+          <div class="kpi-grid mb-24">
+            <div class="kpi-card" style="--kpi-color:var(--green)">
+              <div class="kpi-label">Monthly Total</div>
+              <div class="kpi-value"><span class="unit">₹</span>24.6L</div>
+              <div class="kpi-meta kpi-up">↑ 8.2% vs last month</div>
+            </div>
+            <div class="kpi-card" style="--kpi-color:var(--blue)">
+              <div class="kpi-label">Daily Average</div>
+              <div class="kpi-value"><span class="unit">₹</span>81,900</div>
+              <div class="kpi-meta kpi-neutral">Avg per business day</div>
+            </div>
+            <div class="kpi-card" style="--kpi-color:var(--accent)">
+              <div class="kpi-label">Peak Day</div>
+              <div class="kpi-value">Apr 8</div>
+              <div class="kpi-meta kpi-neutral">₹1,24,500</div>
+            </div>
+            <div class="kpi-card" style="--kpi-color:var(--gold)">
+              <div class="kpi-label">Report ID</div>
+              <div class="kpi-value" style="font-size:16px;letter-spacing:0">RPT-MONTH</div>
+              <div class="kpi-meta kpi-neutral">202604</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><div class="card-title-icon">📈</div> Monthly Revenue — April 2026</div>
+              <span class="badge badge-blue text-mono">UC-08 Monthly Sales Graph</span>
+            </div>
+            <div class="chart-container">
+              <div class="bar-chart" id="monthlyChart" style="height:200px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================
+           SCHEDULER PAGE
+      ============================== -->
+      <div id="page-scheduler" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">System <em>Scheduler</em></div>
+            <div class="page-subtitle">System Clock Actor · @Scheduled · EndOfDayScheduler.java</div>
+          </div>
+          <span class="badge badge-green">Scheduler Active</span>
+        </div>
+
+        <div class="grid-65-35">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><div class="card-title-icon">🕐</div> Scheduled Jobs</div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Job</th>
+                    <th>Cron</th>
+                    <th>Schedule</th>
+                    <th>Next Run</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <div style="font-weight:600;font-size:12.5px">End-of-Day Order</div>
+                      <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">executeEndOfDayProcess()</div>
+                    </td>
+                    <td><span class="text-mono text-xs badge badge-gray">0 55 23 * * *</span></td>
+                    <td class="text-xs color-dim">Daily · 23:55</td>
+                    <td class="text-mono text-xs">Today 23:55</td>
+                    <td><span class="badge badge-green">Active</span></td>
+                    <td><button class="btn btn-ghost btn-sm" onclick="triggerEOD()">▶ Run Now</button></td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <div style="font-weight:600;font-size:12.5px">Heartbeat Check</div>
+                      <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">schedulerHeartbeat()</div>
+                    </td>
+                    <td><span class="text-mono text-xs badge badge-gray">0 0 * * * *</span></td>
+                    <td class="text-xs color-dim">Hourly · :00</td>
+                    <td class="text-mono text-xs">15:00:00</td>
+                    <td><span class="badge badge-green">Active</span></td>
+                    <td><button class="btn btn-ghost btn-sm" disabled style="opacity:0.4">Debug</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Timeline -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><div class="card-title-icon">⏱</div> Today's Schedule</div>
+            </div>
+            <div class="card-body">
+              <div class="timeline">
+                <div class="timeline-item">
+                  <div class="timeline-dot done"></div>
+                  <div class="timeline-time">00:00 — System Start</div>
+                  <div class="timeline-title">Application Initialized</div>
+                  <div class="timeline-desc">Spring Boot startup complete</div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-dot done"></div>
+                  <div class="timeline-time">01:00 — Heartbeat</div>
+                  <div class="timeline-title">Scheduler alive check</div>
+                  <div class="timeline-desc">All threads healthy</div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-dot done"></div>
+                  <div class="timeline-time">09:00 — Sales Start</div>
+                  <div class="timeline-title">First transaction processed</div>
+                  <div class="timeline-desc">TXN-20260412-G8H3 · ₹1,800</div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-dot"></div>
+                  <div class="timeline-time">23:55 — EOD Process</div>
+                  <div class="timeline-title">End-of-Day Order Generation</div>
+                  <div class="timeline-desc">JIT calc → scan → vendor lookup → print</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- EOD Flow Visualization -->
+        <div class="card mt-16">
+          <div class="card-header">
+            <div class="card-title"><div class="card-title-icon">◈</div> EOD Process Flow (DFD P3.0 + Sequence Diagram)</div>
+          </div>
+          <div class="card-body" style="overflow-x:auto">
+            <div style="display:flex;align-items:center;gap:0;min-width:700px;padding:8px 0">
+              <div style="text-align:center;flex:1">
+                <div style="background:var(--surface2);border:1px solid var(--accent);border-radius:8px;padding:10px;font-size:11px;font-weight:600">
+                  🕐 System Clock<br><span style="color:var(--text3);font-family:var(--mono);font-size:9px">23:55 trigger</span>
+                </div>
+              </div>
+              <div style="font-size:18px;color:var(--accent);padding:0 4px">→</div>
+              <div style="text-align:center;flex:1">
+                <div style="background:var(--surface2);border:1px solid var(--blue);border-radius:8px;padding:10px;font-size:11px;font-weight:600">
+                  🔢 P2.0 JIT Calc<br><span style="color:var(--text3);font-family:var(--mono);font-size:9px">Update thresholds</span>
+                </div>
+              </div>
+              <div style="font-size:18px;color:var(--accent);padding:0 4px">→</div>
+              <div style="text-align:center;flex:1">
+                <div style="background:var(--surface2);border:1px solid var(--green);border-radius:8px;padding:10px;font-size:11px;font-weight:600">
+                  🔍 UC-06 Scan<br><span style="color:var(--text3);font-family:var(--mono);font-size:9px">Check thresholds</span>
+                </div>
+              </div>
+              <div style="font-size:18px;color:var(--accent);padding:0 4px">→</div>
+              <div style="text-align:center;flex:1">
+                <div style="background:var(--surface2);border:1px solid var(--gold);border-radius:8px;padding:10px;font-size:11px;font-weight:600">
+                  🏭 UC-04 Vendor<br><span style="color:var(--text3);font-family:var(--mono);font-size:9px">Fetch addresses</span>
+                </div>
+              </div>
+              <div style="font-size:18px;color:var(--accent);padding:0 4px">→</div>
+              <div style="text-align:center;flex:1">
+                <div style="background:var(--surface2);border:1px solid var(--accent);border-radius:8px;padding:10px;font-size:11px;font-weight:600">
+                  📋 Create Order<br><span style="color:var(--text3);font-family:var(--mono);font-size:9px">OrderList entity</span>
+                </div>
+              </div>
+              <div style="font-size:18px;color:var(--accent);padding:0 4px">→</div>
+              <div style="text-align:center;flex:1">
+                <div style="background:var(--surface2);border:1px solid var(--green);border-radius:8px;padding:10px;font-size:11px;font-weight:600">
+                  🖨 Print Output<br><span style="color:var(--text3);font-family:var(--mono);font-size:9px">Printable interface</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div> <!-- /content -->
+  </div> <!-- /main -->
+</div> <!-- /app -->
+
+<!-- ============ MODALS ============ -->
+
+<!-- Sale Modal -->
+<div class="modal-overlay" id="saleModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">⚡ Process New Sale</div>
+      <div class="modal-close" onclick="closeModal('saleModal')">✕</div>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning" style="margin-bottom:16px">
+        <div class="alert-icon">⚡</div>
+        <div>POST /api/sales — Deducts from MySQL D1, logs to MongoDB D2</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Part Number</label>
+        <select class="form-select" id="saleModalPartSelect"></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Quantity</label>
+          <input class="form-input" type="number" id="saleModalQty" value="1" min="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Estimated Revenue</label>
+          <input class="form-input" type="text" id="saleModalRevEst" value="—" readonly style="opacity:0.6">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('saleModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitSaleModal()">Process Sale</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Part Modal -->
+<div class="modal-overlay" id="addPartModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🔧 Add New Spare Part</div>
+      <div class="modal-close" onclick="closeModal('addPartModal')">✕</div>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Part Number</label>
+        <input class="form-input" type="text" id="addPartPartNumber" placeholder="e.g. SP-BRK-003">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Part Name</label>
+        <input class="form-input" type="text" id="addPartPartName" placeholder="e.g. Brake Caliper Front">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Current Quantity</label>
+          <input class="form-input" type="number" id="addPartQty" value="0" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">JIT Threshold</label>
+          <input class="form-input" type="number" id="addPartThreshold" value="1" min="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Unit Price (₹)</label>
+          <input class="form-input" type="number" id="addPartPrice" placeholder="0.00" step="0.01" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Size Category</label>
+          <select class="form-select" id="addPartSize">
+            <option>SMALL</option>
+            <option selected>MEDIUM</option>
+            <option>LARGE</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Storage Rack (MySQL rack_id via storageRack.rackId)</label>
+        <select class="form-select" id="addPartRackSelect"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('addPartModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddPart()">Add Part</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Part Modal -->
+<div class="modal-overlay" id="editPartModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">✎ Edit Spare Part</div>
+      <div class="modal-close" onclick="closeModal('editPartModal')">✕</div>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editPartOriginalNumber">
+      <div class="form-group">
+        <label class="form-label">Part Number (URL key)</label>
+        <input class="form-input" type="text" id="editPartPartNumberDisplay" readonly>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Part Name</label>
+        <input class="form-input" type="text" id="editPartPartName">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Current Quantity</label>
+          <input class="form-input" type="number" id="editPartQty" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">JIT Threshold</label>
+          <input class="form-input" type="number" id="editPartThreshold" min="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Unit Price (₹)</label>
+          <input class="form-input" type="number" id="editPartPrice" step="0.01" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Size Category</label>
+          <select class="form-select" id="editPartSize">
+            <option>SMALL</option>
+            <option>MEDIUM</option>
+            <option>LARGE</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Storage Rack (storageRack.rackId)</label>
+        <select class="form-select" id="editPartRackSelect"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editPartModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditPart()">Save (PUT)</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Vendor Modal -->
+<div class="modal-overlay" id="editVendorModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">✎ Edit Vendor</div>
+      <div class="modal-close" onclick="closeModal('editVendorModal')">✕</div>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editVendorId">
+      <div class="form-group">
+        <label class="form-label">Vendor Name</label>
+        <input class="form-input" type="text" id="editVendorName">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Address</label>
+        <input class="form-input" type="text" id="editVendorAddress">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Contact Number</label>
+          <input class="form-input" type="text" id="editVendorPhone">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" type="email" id="editVendorEmail">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editVendorModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditVendor()">Save (PUT)</button>
+    </div>
+  </div>
+</div>
+
+<!-- Order Print Modal -->
+<div class="modal-overlay" id="orderPrintModal" style="z-index:1001">
+  <div class="modal" style="width:640px">
+    <div class="modal-header">
+      <div class="modal-title">🖨 Order Print Preview — Printable.formatOutput()</div>
+      <div class="modal-close" onclick="closeModal('orderPrintModal')">✕</div>
+    </div>
+    <div class="modal-body">
+      <div class="print-preview" id="printPreviewContent"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('orderPrintModal')">Close</button>
+      <button class="btn btn-success" onclick="closeModal('orderPrintModal');showToast('✓ Order sent to printer','success')">🖨 Print</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Vendor Modal -->
+<div class="modal-overlay" id="addVendorModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🏭 Add New Vendor</div>
+      <div class="modal-close" onclick="closeModal('addVendorModal')">✕</div>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Vendor Name</label>
+        <input class="form-input" type="text" id="addVendorName" placeholder="e.g. NGK Spark Plugs">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Address</label>
+        <input class="form-input" type="text" id="addVendorAddress" placeholder="Full address">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Contact Number</label>
+          <input class="form-input" type="text" id="addVendorPhone" placeholder="+91-...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" type="email" id="addVendorEmail" placeholder="orders@vendor.com">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('addVendorModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddVendor()">Add Vendor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Rack Modal -->
+<div class="modal-overlay" id="addRackModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">▦ Add New Storage Rack</div>
+      <div class="modal-close" onclick="closeModal('addRackModal')">✕</div>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Rack Number</label>
+          <input class="form-input" type="number" id="addRackNumber" value="6" min="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max Capacity</label>
+          <input class="form-input" type="number" id="addRackCapacity" value="80" min="1">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Wall Location</label>
+        <input class="form-input" type="text" id="addRackLocation" placeholder="e.g. West Wall — Section A">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('addRackModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddRack()">Add Rack</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// =====================================================
+// API & STATE (live data — no static inventory arrays)
+// =====================================================
+const API = '';
+/** Same origin as API (Spring Boot); controllers use @CrossOrigin — no extra CORS setup in the browser for this SPA. */
+let partsCache = [];
+let vendorsCache = [];
+let selectedOrderId = null;
+let lastDailyReport = null;
+let lastMonthlyReport = null;
+
+function localISODate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** UC-01 / UC-07: calendar “today” in YYYY-MM-DD for stats, daily report, and same-day transaction queries. */
+function getTodayDate() {
+  return localISODate(new Date());
+}
+
+function addDays(d, n) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+async function apiGetJson(path) {
+  const r = await fetch(API + path, { headers: { Accept: 'application/json' } });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(parseApiError(t) || r.statusText);
+  }
+  return r.json();
+}
+
+/** GET that returns null on 404 (e.g. no order for date). */
+async function apiGetJsonOrNull(path) {
+  const r = await fetch(API + path, { headers: { Accept: 'application/json' } });
+  if (r.status === 404) return null;
+  const text = await r.text();
+  if (!r.ok) throw new Error(parseApiError(text) || r.statusText);
+  return text ? JSON.parse(text) : null;
+}
+
+async function apiGetText(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error((await r.text()) || r.statusText);
+  return r.text();
+}
+
+async function apiPostJson(path, body) {
+  const r = await fetch(API + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: body == null ? '{}' : JSON.stringify(body),
+  });
+  const text = await r.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (_) { /* plain text */ }
+  if (!r.ok) throw new Error(parseApiError(text) || r.statusText);
+  return data;
+}
+
+async function apiPutJson(path, body) {
+  const r = await fetch(API + path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: body == null ? '{}' : JSON.stringify(body),
+  });
+  const text = await r.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (_) { /* plain text */ }
+  if (!r.ok) throw new Error(parseApiError(text) || r.statusText);
+  return data;
+}
+
+function isRackFullMessage(msg) {
+  const s = (msg || '').toLowerCase();
+  return s.includes('rack full');
+}
+
+function toastAddPartFailed(e) {
+  const m = e && e.message ? e.message : '';
+  if (isRackFullMessage(m)) showToast('Rack full — ' + m, 'error');
+  else showToast('Add part failed: ' + m, 'error');
+}
+
+async function apiDelete(path) {
+  const r = await fetch(API + path, { method: 'DELETE', headers: { Accept: 'application/json' } });
+  if (r.ok) return;
+  const text = await r.text();
+  throw new Error(parseApiError(text) || r.statusText);
+}
+
+function parseApiError(text) {
+  if (!text) return text;
+  try {
+    const j = JSON.parse(text);
+    return j.message || text;
+  } catch (_) {
+    return text;
+  }
+}
+
+async function fillAddPartRackSelect() {
+  const sel = document.getElementById('addPartRackSelect');
+  if (!sel) return;
+  let racks = [];
+  try {
+    racks = await apiGetJson('/api/racks');
+  } catch (_) { racks = []; }
+  sel.innerHTML = '<option value="">Unassigned (no rack)</option>';
+  (racks || []).forEach(r => {
+    const o = document.createElement('option');
+    o.value = String(r.rackId);
+    o.textContent = 'Rack #' + r.rackNumber + ' — ' + (r.wallLocation || '');
+    sel.appendChild(o);
+  });
+}
+
+async function fillEditPartRackSelect(selectedRackId) {
+  const sel = document.getElementById('editPartRackSelect');
+  if (!sel) return;
+  let racks = [];
+  try {
+    racks = await apiGetJson('/api/racks');
+  } catch (_) { racks = []; }
+  sel.innerHTML = '<option value="">Unassigned (no rack)</option>';
+  (racks || []).forEach(r => {
+    const o = document.createElement('option');
+    o.value = String(r.rackId);
+    o.textContent = 'Rack #' + r.rackNumber + ' — ' + (r.wallLocation || '');
+    if (selectedRackId != null && String(r.rackId) === String(selectedRackId)) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+async function prepareAddPartModal() {
+  try {
+    await fillAddPartRackSelect();
+    openModal('addPartModal');
+  } catch (e) {
+    showToast('Could not load racks: ' + e.message, 'error');
+  }
+}
+
+function prepareAddVendorModal() {
+  document.getElementById('addVendorName').value = '';
+  document.getElementById('addVendorAddress').value = '';
+  document.getElementById('addVendorPhone').value = '';
+  document.getElementById('addVendorEmail').value = '';
+  openModal('addVendorModal');
+}
+
+async function submitAddPart() {
+  const partNumber = document.getElementById('addPartPartNumber').value.trim();
+  const partName = document.getElementById('addPartPartName').value.trim();
+  if (!partNumber || !partName) {
+    showToast('Part number and name are required', 'warning');
+    return;
+  }
+  const currentQuantity = parseInt(document.getElementById('addPartQty').value, 10);
+  const thresholdValue = parseInt(document.getElementById('addPartThreshold').value, 10);
+  const unitPrice = parseFloat(document.getElementById('addPartPrice').value);
+  if (Number.isNaN(unitPrice) || unitPrice < 0) {
+    showToast('Valid unit price is required', 'warning');
+    return;
+  }
+  const sizeCategory = document.getElementById('addPartSize').value;
+  const rackVal = document.getElementById('addPartRackSelect').value;
+  const payload = {
+    partNumber,
+    partName,
+    currentQuantity: Number.isNaN(currentQuantity) ? 0 : Math.max(0, currentQuantity),
+    thresholdValue: Number.isNaN(thresholdValue) ? 1 : Math.max(0, thresholdValue),
+    unitPrice,
+    sizeCategory
+  };
+  if (rackVal) payload.storageRack = { rackId: parseInt(rackVal, 10) };
+  try {
+    await apiPostJson('/api/parts', payload);
+    closeModal('addPartModal');
+    showToast('✓ Part added (POST /api/parts)', 'success');
+    await loadParts();
+    populateSaleSelect();
+    fillSaleModalSelect();
+    if (document.getElementById('page-parts')?.classList.contains('active')) renderPartsTable();
+    if (document.getElementById('page-racks')?.classList.contains('active')) await loadRacksPage();
+    if (document.getElementById('page-dashboard')?.classList.contains('active')) await refreshDashboard();
+  } catch (e) {
+    toastAddPartFailed(e);
+  }
+}
+
+async function submitAddVendor() {
+  const vendorName = document.getElementById('addVendorName').value.trim();
+  const vendorAddress = document.getElementById('addVendorAddress').value.trim();
+  if (!vendorName || !vendorAddress) {
+    showToast('Vendor name and address are required', 'warning');
+    return;
+  }
+  const contactNumber = document.getElementById('addVendorPhone').value.trim() || null;
+  const email = document.getElementById('addVendorEmail').value.trim() || null;
+  try {
+    await apiPostJson('/api/vendors', { vendorName, vendorAddress, contactNumber, email });
+    closeModal('addVendorModal');
+    showToast('✓ Vendor added (POST /api/vendors)', 'success');
+    if (document.getElementById('page-vendors')?.classList.contains('active')) await loadVendors();
+  } catch (e) {
+    showToast('Add vendor failed: ' + e.message, 'error');
+  }
+}
+
+async function prepareEditPartModal(partNumber) {
+  try {
+    await loadParts();
+    const p = findPart(partNumber);
+    if (!p) {
+      showToast('Part not found', 'warning');
+      return;
+    }
+    document.getElementById('editPartOriginalNumber').value = p.partNumber;
+    document.getElementById('editPartPartNumberDisplay').value = p.partNumber;
+    document.getElementById('editPartPartName').value = p.partName || '';
+    document.getElementById('editPartQty').value = String(p.currentQuantity != null ? p.currentQuantity : 0);
+    document.getElementById('editPartThreshold').value = String(p.thresholdValue != null ? p.thresholdValue : 0);
+    document.getElementById('editPartPrice').value = String(p.unitPrice != null ? p.unitPrice : 0);
+    document.getElementById('editPartSize').value = p.sizeCategory || 'MEDIUM';
+    const rid = p.storageRack && p.storageRack.rackId != null ? p.storageRack.rackId : null;
+    await fillEditPartRackSelect(rid);
+    openModal('editPartModal');
+  } catch (e) {
+    showToast('Could not open part editor: ' + e.message, 'error');
+  }
+}
+
+async function submitEditPart() {
+  const original = document.getElementById('editPartOriginalNumber').value.trim();
+  const partName = document.getElementById('editPartPartName').value.trim();
+  if (!original || !partName) {
+    showToast('Part name is required', 'warning');
+    return;
+  }
+  const currentQuantity = parseInt(document.getElementById('editPartQty').value, 10);
+  const thresholdValue = parseInt(document.getElementById('editPartThreshold').value, 10);
+  const unitPrice = parseFloat(document.getElementById('editPartPrice').value);
+  if (Number.isNaN(unitPrice) || unitPrice < 0) {
+    showToast('Valid unit price is required', 'warning');
+    return;
+  }
+  const sizeCategory = document.getElementById('editPartSize').value;
+  const rackVal = document.getElementById('editPartRackSelect').value;
+  const body = {
+    partName,
+    unitPrice,
+    sizeCategory,
+    currentQuantity: Number.isNaN(currentQuantity) ? 0 : Math.max(0, currentQuantity),
+    thresholdValue: Number.isNaN(thresholdValue) ? 0 : Math.max(0, thresholdValue),
+  };
+  body.storageRack = rackVal ? { rackId: parseInt(rackVal, 10) } : {};
+  try {
+    await apiPutJson('/api/parts/' + encodeURIComponent(original), body);
+    closeModal('editPartModal');
+    showToast('✓ Part updated (PUT /api/parts/…)', 'success');
+    await loadParts();
+    populateSaleSelect();
+    fillSaleModalSelect();
+    if (document.getElementById('page-parts')?.classList.contains('active')) renderPartsTable();
+    if (document.getElementById('page-racks')?.classList.contains('active')) await loadRacksPage();
+    if (document.getElementById('page-dashboard')?.classList.contains('active')) await refreshDashboard();
+    if (document.getElementById('page-jit')?.classList.contains('active')) {
+      renderJitPageKpis();
+      renderJIT();
+    }
+  } catch (e) {
+    const m = e && e.message ? e.message : '';
+    if (isRackFullMessage(m)) showToast('Rack full — ' + m, 'error');
+    else showToast('Update part failed: ' + m, 'error');
+  }
+}
+
+async function prepareEditVendorFromId(vendorId, ev) {
+  if (ev) ev.stopPropagation();
+  let v = (vendorsCache || []).find(x => x.vendorId === vendorId);
+  if (!v) {
+    try {
+      v = await apiGetJson('/api/vendors/' + vendorId);
+    } catch (e) {
+      showToast('Could not load vendor: ' + e.message, 'error');
+      return;
+    }
+  }
+  document.getElementById('editVendorId').value = String(v.vendorId);
+  document.getElementById('editVendorName').value = v.vendorName || '';
+  document.getElementById('editVendorAddress').value = v.vendorAddress || '';
+  document.getElementById('editVendorPhone').value = v.contactNumber || '';
+  document.getElementById('editVendorEmail').value = v.email || '';
+  openModal('editVendorModal');
+}
+
+async function submitEditVendor() {
+  const vendorId = parseInt(document.getElementById('editVendorId').value, 10);
+  if (Number.isNaN(vendorId)) {
+    showToast('Invalid vendor', 'warning');
+    return;
+  }
+  const vendorName = document.getElementById('editVendorName').value.trim();
+  const vendorAddress = document.getElementById('editVendorAddress').value.trim();
+  if (!vendorName || !vendorAddress) {
+    showToast('Vendor name and address are required', 'warning');
+    return;
+  }
+  const contactNumber = document.getElementById('editVendorPhone').value.trim() || null;
+  const email = document.getElementById('editVendorEmail').value.trim() || null;
+  try {
+    await apiPutJson('/api/vendors/' + vendorId, { vendorName, vendorAddress, contactNumber, email });
+    closeModal('editVendorModal');
+    showToast('✓ Vendor updated (PUT /api/vendors/' + vendorId + ')', 'success');
+    if (document.getElementById('page-vendors')?.classList.contains('active')) await loadVendors();
+  } catch (e) {
+    showToast('Update vendor failed: ' + e.message, 'error');
+  }
+}
+
+async function submitAddRack() {
+  const rackNumber = parseInt(document.getElementById('addRackNumber').value, 10);
+  const maxCapacity = parseInt(document.getElementById('addRackCapacity').value, 10);
+  const wallLocation = document.getElementById('addRackLocation').value.trim();
+  if (Number.isNaN(rackNumber) || Number.isNaN(maxCapacity) || !wallLocation) {
+    showToast('Rack number, capacity, and location are required', 'warning');
+    return;
+  }
+  try {
+    await apiPostJson('/api/racks', { rackNumber, maxCapacity, wallLocation });
+    closeModal('addRackModal');
+    showToast('✓ Rack added (POST /api/racks)', 'success');
+    if (document.getElementById('page-racks')?.classList.contains('active')) await loadRacksPage();
+    await fillAddPartRackSelect();
+  } catch (e) {
+    showToast('Add rack failed: ' + e.message, 'error');
+  }
+}
+
+function fillSaleModalSelect() {
+  const sel = document.getElementById('saleModalPartSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Select part...</option>';
+  partsCache.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.partNumber;
+    o.textContent = p.partNumber + ' — ' + p.partName + ' · ₹' + Number(p.unitPrice || 0).toLocaleString();
+    sel.appendChild(o);
+  });
+}
+
+function updateSaleModalRevenueEst() {
+  const pn = document.getElementById('saleModalPartSelect')?.value;
+  const q = parseInt(document.getElementById('saleModalQty')?.value, 10) || 0;
+  const el = document.getElementById('saleModalRevEst');
+  if (!el) return;
+  const p = findPart(pn);
+  if (!p || !q) { el.value = '—'; return; }
+  el.value = '₹' + (Number(p.unitPrice) * q).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function prepareSaleModal() {
+  try {
+    await loadParts();
+    fillSaleModalSelect();
+    updateSaleModalRevenueEst();
+    openModal('saleModal');
+  } catch (e) {
+    showToast('Could not load parts: ' + e.message, 'error');
+  }
+}
+
+async function submitSaleModal() {
+  const part = document.getElementById('saleModalPartSelect').value;
+  const qty = parseInt(document.getElementById('saleModalQty').value, 10);
+  if (!part) { showToast('Please select a part', 'warning'); return; }
+  const mainSel = document.getElementById('salePartSelect');
+  const mainQty = document.getElementById('saleQty');
+  if (mainSel) mainSel.value = part;
+  if (mainQty) mainQty.value = String(qty || 1);
+  closeModal('saleModal');
+  await processSale();
+}
+
+async function deleteVendorById(vendorId) {
+  if (!confirm('Delete this vendor? This will fail if the vendor is still linked to parts.')) return;
+  try {
+    await apiDelete('/api/vendors/' + vendorId);
+    showToast('✓ Vendor deleted', 'success');
+    if (document.getElementById('page-vendors')?.classList.contains('active')) await loadVendors();
+  } catch (e) {
+    showToast('Delete failed: ' + e.message, 'error');
+  }
+}
+
+function rackLabel(p) {
+  const r = p.storageRack && p.storageRack.rackNumber != null ? p.storageRack.rackNumber : null;
+  return r != null ? `Rack #${r}` : '—';
+}
+
+function findPart(num) {
+  return partsCache.find(x => x.partNumber === num);
+}
+
+async function loadParts() {
+  try {
+    const raw = await apiGetJson('/api/parts');
+    partsCache = Array.isArray(raw) ? raw : [];
+  } catch (_) {
+    partsCache = [];
+  }
+  return partsCache;
+}
+
+function populateSaleSelect() {
+  const sel = document.getElementById('salePartSelect');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Select part...</option>';
+  partsCache.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.partNumber;
+    o.textContent = `${p.partNumber} — ${p.partName}`;
+    sel.appendChild(o);
+  });
+  if (cur && partsCache.some(p => p.partNumber === cur)) sel.value = cur;
+}
+
+// =====================================================
+// NAVIGATION
+// =====================================================
+const PAGES = ['dashboard','sales','orders','parts','jit','racks','vendors','reports','scheduler'];
+const TITLES = {
+  dashboard: 'Dashboard', sales: 'Sales', orders: 'Orders',
+  parts: 'Spare Parts', jit: 'JIT Thresholds', racks: 'Storage Racks',
+  vendors: 'Vendors', reports: 'Reports', scheduler: 'Scheduler'
+};
+
+async function navigate(page) {
+  PAGES.forEach(p => {
+    document.getElementById('page-'+p)?.classList.remove('active');
+  });
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
+  const pageEl = document.getElementById('page-'+page);
+  if (pageEl) pageEl.classList.add('active');
+
+  document.querySelectorAll('.nav-item').forEach(el => {
+    if (el.getAttribute('onclick')?.includes(`'${page}'`)) {
+      el.classList.add('active');
+    }
+  });
+
+  document.getElementById('breadcrumb').innerHTML = `ASPAS / <span>${TITLES[page]||page}</span>`;
+
+  try {
+    if (page === 'dashboard') {
+      await refreshDashboard();
+    }
+    if (page === 'sales') {
+      await loadParts();
+      populateSaleSelect();
+      await loadTodayTransactions();
+    }
+    if (page === 'orders') {
+      await loadOrders();
+    }
+    if (page === 'parts') {
+      await loadParts();
+      renderPartsTable();
+    }
+    if (page === 'jit') {
+      await loadParts();
+      renderJitPageKpis();
+      renderJIT();
+    }
+    if (page === 'racks') {
+      await loadRacksPage();
+    }
+    if (page === 'vendors') {
+      await loadVendors();
+    }
+    if (page === 'reports') {
+      await loadReportsPage();
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('API error: ' + (e.message || e), 'error');
+  }
+}
+
+// =====================================================
+// CLOCK
+// =====================================================
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-IN');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// =====================================================
+// CHARTS
+// =====================================================
+function renderBarChart(containerId, data, prevData, maxH, barLabels) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const labels = barLabels || ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const max = Math.max(...data, ...(prevData||[]), 1);
+  el.innerHTML = data.map((v, i) => {
+    const h = Math.round((v / max) * (maxH || 140));
+    const ph = prevData ? Math.round((prevData[i] / max) * (maxH || 140)) : 0;
+    return `
+      <div class="bar-group">
+        <div style="display:flex;gap:2px;align-items:flex-end;flex:1;width:100%">
+          ${prevData ? `<div class="bar secondary" style="height:${ph}px;flex:1" data-tooltip="₹${Number(prevData[i]||0).toLocaleString()}"></div>` : ''}
+          <div class="bar" style="height:${Math.max(h,3)}px;flex:1" data-tooltip="₹${Number(v||0).toLocaleString()}"></div>
+        </div>
+        <div class="bar-label">${labels[i]||''}</div>
+      </div>`;
+  }).join('');
+}
+
+/**
+ * UC-07 / UC-04: map backend hourlyDataPoints to fixed slots 09:00–15:00; missing hours → 0.
+ */
+function hourlyBucketsFromReport(daily) {
+  const hourLabels = ['09','10','11','12','13','14','15'];
+  const buckets = new Array(7).fill(0);
+  const pts = daily && Array.isArray(daily.hourlyDataPoints) ? daily.hourlyDataPoints : [];
+  const map = {};
+  pts.forEach(pt => {
+    if (!pt || pt.hour == null) return;
+    const h = Number(pt.hour);
+    const rev = pt.revenue != null ? Number(pt.revenue) : 0;
+    if (!Number.isNaN(h)) map[h] = rev;
+  });
+  for (let i = 0; i < 7; i++) {
+    buckets[i] = map[9 + i] != null ? map[9 + i] : 0;
+  }
+  return { buckets, hourLabels };
+}
+
+function renderHourlyChart(hourlyBuckets, hourLabels) {
+  const el = document.getElementById('hourlyChart');
+  if (!el) return;
+  const H = hourlyBuckets && hourlyBuckets.length ? hourlyBuckets : new Array(7).fill(0);
+  const L = hourLabels || ['09','10','11','12','13','14','15'];
+  const max = Math.max(...H, 1);
+  el.innerHTML = H.map((v, i) => {
+    const hPx = Math.round((v / max) * 180);
+    return `
+    <div class="bar-group">
+      <div class="bar" style="height:${Math.max(hPx, v > 0 ? 3 : 0)}px" data-tooltip="₹${Number(v||0).toLocaleString()}"></div>
+      <div class="bar-label">${L[i]}:00</div>
+    </div>`;
+  }).join('');
+}
+
+/**
+ * UC-08: monthly dailyDataPoints — sparse months OK; sort by calendar day; revenue defaults to 0.
+ */
+function renderMonthlyChart(dailyPoints) {
+  const el = document.getElementById('monthlyChart');
+  if (!el) return;
+  let pts = Array.isArray(dailyPoints) ? dailyPoints.slice() : [];
+  if (!pts.length) {
+    el.innerHTML = '<div class="bar-group"><div class="bar-label">No data</div></div>';
+    return;
+  }
+  pts.sort((a, b) => (Number(a?.day) || 0) - (Number(b?.day) || 0));
+  const revs = pts.map(d => {
+    const r = d && d.revenue != null ? Number(d.revenue) : 0;
+    return Number.isFinite(r) ? r : 0;
+  });
+  const maxVal = Math.max(...revs, 1);
+  const peak = Math.max(...revs);
+  el.innerHTML = pts.map((dp, i) => {
+    const v = dp && dp.revenue != null ? Number(dp.revenue) : 0;
+    const safeV = Number.isFinite(v) ? v : 0;
+    const dayNum = dp && dp.day != null ? dp.day : (i + 1);
+    const barH = Math.round((safeV / maxVal) * 200);
+    return `
+    <div class="bar-group">
+      <div class="bar" style="height:${Math.max(barH, 3)}px;background:${safeV===peak && safeV>0?'var(--green)':'var(--accent)'}" data-tooltip="Day ${dayNum}: ₹${safeV.toLocaleString()}"></div>
+      <div class="bar-label">${dayNum}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderTopPartsList(rows) {
+  const el = document.getElementById('topPartsList');
+  if (!el) return;
+  if (!rows || !rows.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:12px">No sales data for this day yet.</div>';
+    return;
+  }
+  const maxQty = Math.max(...rows.map(p => p.qtySold || 0), 1);
+  el.innerHTML = rows.map(p => {
+    let rev = p.revenue != null ? Number(p.revenue) : 0;
+    if (!rev && p.qtySold) {
+      const fp = findPart(p.partNumber);
+      rev = txnLineRevenue({
+        revenueAmount: null,
+        quantitySold: p.qtySold,
+        sellingPrice: fp ? fp.unitPrice : null,
+        unitPrice: fp ? fp.unitPrice : null
+      });
+    }
+    return `
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <div style="font-size:12px;font-weight:600">${p.partNumber} ${findPart(p.partNumber)?.partName ? '— ' + findPart(p.partNumber).partName : ''}</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--green)">₹${Number(rev||0).toLocaleString()}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="progress-wrap" style="flex:1">
+          <div class="progress-bar" style="width:${((p.qtySold||0)/maxQty)*100}%"></div>
+        </div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">${p.qtySold||0} units</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/** Jackson may emit ISO string or numeric array for LocalDateTime. */
+function parseTxnDate(t) {
+  const raw = t && t.transactionDate;
+  if (raw == null) return null;
+  if (typeof raw === 'string') {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (Array.isArray(raw) && raw.length >= 3) {
+    const y = raw[0], mo = raw[1], day = raw[2], hh = raw[3] ?? 0, mi = raw[4] ?? 0, sec = raw[5] ?? 0;
+    return new Date(y, mo - 1, day, hh, mi, sec);
+  }
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Matches backend: revenueAmount or quantitySold × (unitPrice | sellingPrice). */
+function txnLineRevenue(t) {
+  if (!t) return 0;
+  if (t.revenueAmount != null && t.revenueAmount !== '') return Number(t.revenueAmount) || 0;
+  const q = Number(t.quantitySold) || 0;
+  const p = Number(t.unitPrice != null ? t.unitPrice : t.sellingPrice) || 0;
+  return q * p;
+}
+
+function aggregateHourlyFromTxns(transactions) {
+  const HOURS = ['09','10','11','12','13','14','15'];
+  const buckets = new Array(7).fill(0);
+  (transactions || []).forEach(t => {
+    const d = parseTxnDate(t);
+    if (!d) return;
+    const h = d.getHours();
+    if (h >= 9 && h <= 15) buckets[h - 9] += txnLineRevenue(t);
+  });
+  return { buckets, HOURS };
+}
+
+async function loadDashboardCharts() {
+  const today = new Date();
+  const labels = [];
+  const cur = [];
+  const prev = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = addDays(today, -i);
+    labels.push(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]);
+    try {
+      const rep = await apiGetJson('/api/reports/daily/' + localISODate(d));
+      cur.push(rep.totalRevenue || 0);
+    } catch (_) { cur.push(0); }
+  }
+  for (let i = 13; i >= 7; i--) {
+    const d = addDays(today, -i);
+    try {
+      const rep = await apiGetJson('/api/reports/daily/' + localISODate(d));
+      prev.push(rep.totalRevenue || 0);
+    } catch (_) { prev.push(0); }
+  }
+  renderBarChart('revenueChart', cur, prev, 140, labels);
+}
+
+async function refreshDashboard() {
+  await loadParts();
+  let belowList = [];
+  try {
+    const bl = await apiGetJson('/api/parts/below-threshold');
+    belowList = Array.isArray(bl) ? bl : [];
+  } catch (_) { belowList = []; }
+  const below = belowList.length;
+  const total = partsCache.length;
+  let racks = [];
+  try {
+    const rk = await apiGetJson('/api/racks');
+    racks = Array.isArray(rk) ? rk : [];
+  } catch (_) { racks = []; }
+  const todayIso = getTodayDate();
+  const yestIso = localISODate(addDays(new Date(), -1));
+  let todayStats = { totalRevenue: 0, transactionCount: 0 };
+  let yestStats = { totalRevenue: 0, transactionCount: 0 };
+  try {
+    todayStats = await apiGetJson('/api/sales/stats?date=' + encodeURIComponent(todayIso));
+    console.log('Stats Received:', todayStats);
+  } catch (_) { /* ok */ }
+  try {
+    yestStats = await apiGetJson('/api/sales/stats?date=' + encodeURIComponent(yestIso));
+  } catch (_) { /* ok */ }
+  const rev = Number(todayStats?.totalRevenue) || 0;
+  const dy = Number(yestStats?.totalRevenue) || 0;
+  const txToday = todayStats?.transactionCount != null ? Number(todayStats.transactionCount) : 0;
+  const txYest = yestStats?.transactionCount != null ? Number(yestStats.transactionCount) : 0;
+
+  const kpiRoot = document.querySelector('#page-dashboard .kpi-grid');
+  if (kpiRoot) {
+    const cards = kpiRoot.querySelectorAll('.kpi-card');
+    if (cards[0]) {
+      cards[0].querySelector('.kpi-value').textContent = String(total);
+      const meta = cards[0].querySelector('.kpi-meta');
+      if (meta) meta.innerHTML = '<span>▪</span><span>Across ' + racks.length + ' racks</span>';
+    }
+    if (cards[1]) {
+      const v = cards[1].querySelector('.kpi-value');
+      if (v) { v.textContent = String(below); v.style.color = 'var(--red)'; }
+    }
+    if (cards[2]) {
+      cards[2].querySelector('.kpi-value').innerHTML = '<span class="unit">₹</span>' + Math.round(rev).toLocaleString();
+      const pct = dy > 0 ? (((rev - dy) / dy) * 100).toFixed(1) : '—';
+      const meta = cards[2].querySelector('.kpi-meta');
+      if (meta) meta.innerHTML = rev >= dy ? `<span>↑</span><span>${pct}%</span><span class="color-dim">vs yesterday</span>` : `<span class="kpi-down">↓</span><span>${pct}%</span><span class="color-dim">vs yesterday</span>`;
+    }
+    if (cards[3]) {
+      cards[3].querySelector('.kpi-value').textContent = String(txToday);
+      const dt = txToday - txYest;
+      const meta = cards[3].querySelector('.kpi-meta');
+      if (meta) meta.innerHTML = `<span>${dt >= 0 ? '↑' : '↓'}</span><span>${Math.abs(dt)}</span><span class="color-dim">vs yesterday</span>`;
+    }
+  }
+
+  let txns = [];
+  try {
+    const tr = await apiGetJson('/api/sales/transactions/recent?limit=5');
+    txns = Array.isArray(tr) ? tr : [];
+  } catch (_) { txns = []; }
+  txns = txns.slice().sort((a, b) => {
+    const da = parseTxnDate(a), db = parseTxnDate(b);
+    if (!da || !db) return 0;
+    return db - da;
+  });
+  const recentEl = document.getElementById('dashboardRecentTxns');
+  if (recentEl) {
+    const icons = ['🔧','⚙','🛢','⚠','🔩'];
+    recentEl.innerHTML = txns.slice(0, 5).map((t, i) => {
+      const d = parseTxnDate(t);
+      const tm = d ? d.toLocaleTimeString('en-IN', { hour12: false }) : '';
+      return `
+      <div class="activity-item">
+        <div class="activity-icon" style="background:var(--green-dim)">${icons[i % icons.length]}</div>
+        <div class="activity-body">
+          <div class="activity-title">${(t.partName || '')} — ${t.partNumber || ''}</div>
+          <div class="activity-meta">${t.transactionId || ''} · ${tm} · Qty: ${t.quantitySold || 0}</div>
+        </div>
+        <div class="activity-amount color-green">₹${Math.round(txnLineRevenue(t)).toLocaleString()}</div>
+      </div>`;
+    }).join('') || '<div style="padding:16px;color:var(--text3);font-size:12px">No recent transactions yet.</div>';
+  }
+
+  const jitEl = document.getElementById('dashboardJitAlerts');
+  const jitBadge = document.getElementById('dashboardJitBadge');
+  if (jitBadge) jitBadge.textContent = below ? `${below} Critical` : 'All OK';
+  if (jitEl) {
+    const show = belowList.slice(0, 4);
+    jitEl.innerHTML = show.map(p => {
+      const b = (p.currentQuantity || 0) < (p.thresholdValue || 0);
+      const badge = b ? '<span class="badge badge-red">Low Stock</span>' : '<span class="badge badge-orange">Watch</span>';
+      return `
+      <div class="activity-item">
+        <div class="activity-body">
+          <div class="activity-title">${p.partNumber} ${p.partName || ''}</div>
+          <div class="activity-meta">Stock: ${p.currentQuantity} / Threshold: ${p.thresholdValue}</div>
+        </div>
+        ${badge}
+      </div>`;
+    }).join('') || '<div style="padding:16px;color:var(--text3);font-size:12px">No JIT alerts.</div>';
+  }
+
+  await loadDashboardCharts();
+}
+
+// =====================================================
+// PARTS TABLE
+// =====================================================
+function renderPartsTable() {
+  const tbody = document.getElementById('partsTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = partsCache.map(p => {
+    const stock = p.currentQuantity || 0;
+    const thresh = p.thresholdValue || 0;
+    const below = stock < thresh;
+    const pct = Math.min(100, Math.round((stock / Math.max(thresh * 2, stock + 1)) * 100));
+    const barClass = below ? 'red' : (pct > 60 ? 'green' : '');
+    const num = p.partNumber || '';
+    return `
+      <tr>
+        <td><span class="part-num">${num}</span></td>
+        <td style="font-weight:600">${p.partName || ''}</td>
+        <td class="text-mono">${stock}</td>
+        <td class="text-mono">${thresh}</td>
+        <td>${below ? '<span class="badge badge-red">Low Stock</span>' : '<span class="badge badge-green">Healthy</span>'}</td>
+        <td class="text-mono">₹${Number(p.unitPrice||0).toLocaleString()}</td>
+        <td><span class="badge badge-gray">${p.sizeCategory || ''}</span></td>
+        <td class="text-mono color-dim">${rackLabel(p)}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div class="progress-wrap"><div class="progress-bar ${barClass}" style="width:${pct}%"></div></div>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--text3)">${pct}%</span>
+          </div>
+        </td>
+        <td>
+          <div class="flex gap-8">
+            <button type="button" class="btn btn-ghost btn-sm" onclick='prepareEditPartModal(${JSON.stringify(num)})'>Edit</button>
+            ${below ? `<button type="button" class="btn btn-danger btn-sm" onclick="showToast('Reorder: ${num}','success')">Reorder</button>` : ''}
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+function renderJitPageKpis() {
+  const grid = document.querySelector('#page-jit .kpi-grid');
+  if (!grid) return;
+  let above = 0, below = 0;
+  partsCache.forEach(p => {
+    if ((p.currentQuantity || 0) < (p.thresholdValue || 0)) below++; else above++;
+  });
+  const cards = grid.querySelectorAll('.kpi-card');
+  if (cards[0]) cards[0].querySelector('.kpi-value').textContent = String(above);
+  if (cards[1]) cards[1].querySelector('.kpi-value').textContent = String(below);
+}
+
+// =====================================================
+// JIT CIRCLES
+// =====================================================
+function renderJIT() {
+  const circlesEl = document.getElementById('jitCircles');
+  const tableEl = document.getElementById('jitTableBody');
+  if (!circlesEl || !tableEl) return;
+
+  circlesEl.innerHTML = partsCache.map(p => {
+    const stock = p.currentQuantity || 0;
+    const thresh = Math.max(p.thresholdValue || 0, 1);
+    const pct = Math.min(100, Math.round((stock / thresh) * 100));
+    const below = stock < (p.thresholdValue || 0);
+    const color = below ? 'var(--red)' : (pct < 150 ? 'var(--accent)' : 'var(--green)');
+    const r = 16; const circ = 2 * Math.PI * r;
+    const dash = (pct / 100) * circ;
+    const num = p.partNumber || '';
+    return `
+      <div class="jit-item" data-tooltip="${num}: ${stock}/${p.thresholdValue}">
+        <div class="jit-circle">
+          <svg width="42" height="42" viewBox="0 0 42 42">
+            <circle cx="21" cy="21" r="${r}" fill="none" stroke="var(--surface2)" stroke-width="4"/>
+            <circle cx="21" cy="21" r="${r}" fill="none" stroke="${color}" stroke-width="4"
+              stroke-dasharray="${Math.min(dash,circ)} ${circ}" stroke-linecap="round"/>
+          </svg>
+          <span style="font-family:var(--mono);font-size:9px;position:relative;z-index:1;color:${color}">${Math.min(pct,999)}%</span>
+        </div>
+        <div class="jit-label">${num.replace(/^SP-/, '')}</div>
+      </div>`;
+  }).join('');
+
+  tableEl.innerHTML = partsCache.map(p => {
+    const stock = p.currentQuantity || 0;
+    const thresh = p.thresholdValue || 0;
+    const below = stock < thresh;
+    const reorder = below ? Math.max(0, thresh - stock) : 0;
+    const num = p.partNumber || '';
+    return `
+      <tr>
+        <td><span class="part-num">${num}</span></td>
+        <td>${p.partName || ''}</td>
+        <td class="text-mono">${stock}</td>
+        <td class="text-mono">${thresh}</td>
+        <td class="text-mono">${thresh}</td>
+        <td class="text-mono">${reorder > 0 ? `<span class="color-red">${reorder}</span>` : '<span class="color-dim">—</span>'}</td>
+        <td>${below ? '<span class="badge badge-red">Low Stock</span>' : '<span class="badge badge-green">Healthy</span>'}</td>
+      </tr>`;
+  }).join('');
+}
+
+// =====================================================
+// SALE LOGIC
+// =====================================================
+async function processSale() {
+  const part = document.getElementById('salePartSelect').value;
+  const qty = parseInt(document.getElementById('saleQty').value, 10);
+  if (!part) { showToast('Please select a part','warning'); return; }
+  const p = findPart(part);
+  if (!p) { showToast('Part not loaded','warning'); return; }
+  if (!qty || qty < 1) { showToast('Invalid quantity','warning'); return; }
+  if (qty > (p.currentQuantity || 0)) {
+    showToast(`⚠ Insufficient stock: ${p.currentQuantity} available`,'warning');
+    return;
+  }
+  try {
+    const res = await apiPostJson('/api/sales', { partNumber: part, quantity: qty });
+    showToast(res.message || `✓ Sale ${res.transactionId}`, 'success');
+    await loadParts();
+    populateSaleSelect();
+    const mainSel = document.getElementById('salePartSelect');
+    if (mainSel) mainSel.value = part;
+    const updated = findPart(part);
+    const sp = document.getElementById('salePreview');
+    if (sp) sp.innerHTML = `
+    <div style="text-align:left">
+      <div style="margin-bottom:8px;font-weight:700;color:var(--text)">${res.partName || ''}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">
+        <div style="color:var(--text3)">Txn ID</div><div class="text-mono">${res.transactionId || ''}</div>
+        <div style="color:var(--text3)">Part #</div><div class="part-num">${res.partNumber || ''}</div>
+        <div style="color:var(--text3)">Quantity</div><div class="text-mono">${res.quantitySold} units</div>
+        <div style="color:var(--text3)">Unit Price</div><div class="text-mono">₹${Number(res.unitPrice||0).toLocaleString()}</div>
+        <div style="color:var(--text3)">Revenue</div><div class="text-mono color-green">₹${Number(res.revenueAmount||0).toLocaleString()}</div>
+        <div style="color:var(--text3)">New Stock</div><div class="text-mono">${updated ? updated.currentQuantity : '—'}</div>
+      </div>
+    </div>`;
+    fillSaleModalSelect();
+    updateSaleModalRevenueEst();
+    await loadTodayTransactions();
+  } catch (e) {
+    showToast('Sale failed: ' + e.message, 'error');
+  }
+}
+
+function clearSaleForm() {
+  const s = document.getElementById('salePartSelect');
+  const q = document.getElementById('saleQty');
+  const sp = document.getElementById('salePreview');
+  if (s) s.value = '';
+  if (q) q.value = '1';
+  if (sp) sp.textContent = 'Select a part to preview transaction details';
+}
+
+document.getElementById('salePartSelect')?.addEventListener('change', function() {
+  const p = findPart(this.value);
+  if (!p) return;
+  const stock = p.currentQuantity || 0;
+  const thresh = p.thresholdValue || 0;
+  const sp = document.getElementById('salePreview');
+  if (!sp) return;
+  sp.innerHTML = `
+    <div style="text-align:left">
+      <div style="margin-bottom:8px;font-weight:700;color:var(--text)">${p.partName || ''}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">
+        <div style="color:var(--text3)">Part #</div><div class="part-num">${p.partNumber || ''}</div>
+        <div style="color:var(--text3)">Current Stock</div><div class="text-mono">${stock} units</div>
+        <div style="color:var(--text3)">Unit Price</div><div class="text-mono">₹${Number(p.unitPrice||0).toLocaleString()}</div>
+        <div style="color:var(--text3)">Size</div><div><span class="badge badge-gray">${p.sizeCategory || ''}</span></div>
+        <div style="color:var(--text3)">Rack</div><div class="text-mono">${rackLabel(p)}</div>
+        <div style="color:var(--text3)">JIT Status</div><div>${stock < thresh ? '<span class="badge badge-red">Low Stock</span>' : '<span class="badge badge-green">Healthy</span>'}</div>
+      </div>
+    </div>`;
+});
+
+async function loadTodayTransactions() {
+  const todayIso = getTodayDate();
+  let txns = [];
+  try {
+    const raw = await apiGetJson('/api/sales/transactions?date=' + encodeURIComponent(todayIso));
+    txns = Array.isArray(raw) ? raw : [];
+  } catch (_) { txns = []; }
+  const tbody = document.getElementById('txnTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = (txns || []).slice().sort((a, b) => {
+    const da = parseTxnDate(a), db = parseTxnDate(b);
+    if (!da || !db) return 0;
+    return db - da;
+  }).map(t => {
+    const d = parseTxnDate(t);
+    const tm = d ? d.toLocaleTimeString('en-IN', { hour12: false }) : '';
+    return `<tr>
+      <td><span class="text-mono text-xs color-dim">${t.transactionId || ''}</span></td>
+      <td><span class="part-num">${t.partNumber || ''}</span> ${t.partName || ''}</td>
+      <td>${t.quantitySold || 0}</td>
+      <td class="text-mono">₹${Number(t.sellingPrice||0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+      <td class="text-mono color-green">₹${Number(txnLineRevenue(t)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+      <td class="text-mono text-xs color-dim">${tm}</td>
+      <td><span class="badge badge-green">✓ Logged</span></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" style="padding:16px;color:var(--text3)">No transactions today.</td></tr>';
+}
+
+// =====================================================
+// ORDER / EOD
+// =====================================================
+async function runEodProcess() {
+  showToast('⚡ POST /api/orders/generate — EOD (JIT + orders)...', 'info');
+  try {
+    const raw = await apiPostJson('/api/orders/generate', {});
+    const orders = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+    const lines = orders.reduce((s, o) => s + (o.totalItems != null ? o.totalItems : ((o.items && o.items.length) || 0)), 0);
+    const firstId = orders[0] && orders[0].orderId != null ? orders[0].orderId : '—';
+    showToast(`✓ EOD — ${orders.length} vendor order(s), ${lines} line(s) (first #${firstId})`, 'success');
+    await loadParts();
+    populateSaleSelect();
+    fillSaleModalSelect();
+    if (document.getElementById('page-orders')?.classList.contains('active')) await loadOrders();
+    if (document.getElementById('page-dashboard')?.classList.contains('active')) await refreshDashboard();
+    if (document.getElementById('page-jit')?.classList.contains('active')) {
+      renderJitPageKpis();
+      renderJIT();
+    }
+  } catch (e) {
+    showToast('EOD failed: ' + e.message, 'error');
+  }
+}
+
+function generateOrder() {
+  runEodProcess();
+}
+
+function triggerEOD() {
+  runEodProcess();
+}
+
+async function showOrderPrint(orderId) {
+  try {
+    let content = await apiGetText('/api/orders/' + orderId + '/print');
+    const o = Array.isArray(ordersCache) ? ordersCache.find(x => x.orderId === orderId) : null;
+    if (o && Array.isArray(o.items)) {
+      const extra = o.items
+        .filter(it => it && it.vendorAddress)
+        .map(it => `${it.partNumber || ''}: ${it.vendorAddress}`)
+        .join('\n');
+      if (extra) {
+        content = (content || '') + '\n\n— Vendor addresses (UC-05) —\n' + extra;
+      }
+    }
+    const pre = document.getElementById('printPreviewContent');
+    if (pre) pre.textContent = content || '';
+    openModal('orderPrintModal');
+  } catch (e) {
+    showToast('Print load failed: ' + e.message, 'error');
+  }
+}
+
+function showOrderPrintSelected() {
+  if (selectedOrderId != null) showOrderPrint(selectedOrderId);
+  else showToast('No order selected', 'warning');
+}
+
+let ordersCache = [];
+
+/** UC-03: one backend row per vendor — surface vendor name for the list. */
+function orderVendorLabel(o) {
+  if (!o) return '—';
+  const items = Array.isArray(o.items) ? o.items : [];
+  const vn = items[0]?.vendorName;
+  if (vn) return vn;
+  if (o.vendorId != null) return 'Vendor #' + o.vendorId;
+  return '—';
+}
+
+function renderOrdersTableFromCache(emptyMsg) {
+  const empty = emptyMsg || 'No orders yet.';
+  const tbody = document.getElementById('ordersTableBody');
+  if (!tbody) return;
+  const list = Array.isArray(ordersCache) ? ordersCache : [];
+  tbody.innerHTML = list.map(o => {
+    const n = o.totalItems != null ? o.totalItems : ((Array.isArray(o.items) ? o.items.length : 0));
+    const badgeClass = n === 0 ? 'badge-gray' : (n > 3 ? 'badge-red' : 'badge-orange');
+    const st = o.isPrinted ? '<span class="badge badge-green">✓ Printed</span>' : '<span class="badge badge-blue">Pending</span>';
+    const vLabel = orderVendorLabel(o);
+    return `<tr>
+      <td class="text-mono">#${o.orderId}</td>
+      <td class="text-mono text-xs">${o.orderDate || ''}</td>
+      <td><span class="badge ${badgeClass}">${n} line(s)</span><div class="text-mono text-xs color-dim" style="margin-top:4px">${vLabel}</div></td>
+      <td>${st}</td>
+      <td>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="selectOrderRow(${o.orderId})">Details</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="showOrderPrint(${o.orderId})">🖨 Print</button>
+      </td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" style="padding:16px">${empty}</td></tr>`;
+
+  if (list.length) {
+    selectedOrderId = list[0].orderId;
+    renderOrderDetail(list[0]);
+  } else {
+    selectedOrderId = null;
+    renderOrderDetail(null);
+  }
+}
+
+async function loadOrders() {
+  try {
+    const raw = await apiGetJson('/api/orders');
+    ordersCache = Array.isArray(raw) ? raw : [];
+  } catch (_) {
+    ordersCache = [];
+  }
+  renderOrdersTableFromCache();
+}
+
+async function applyOrderDateFilter() {
+  const inp = document.getElementById('orderDateFilter');
+  const d = inp && inp.value ? inp.value.trim() : '';
+  if (!d) {
+    await loadOrders();
+    return;
+  }
+  try {
+    const o = await apiGetJsonOrNull('/api/orders/search?date=' + encodeURIComponent(d));
+    if (o == null) {
+      ordersCache = [];
+      renderOrdersTableFromCache('No order for that date.');
+      showToast('No order for ' + d, 'info');
+      return;
+    }
+    ordersCache = Array.isArray(o) ? o : [o];
+    if (!ordersCache.length) {
+      renderOrdersTableFromCache('No orders for that date.');
+      showToast('No orders for ' + d, 'info');
+      return;
+    }
+    renderOrdersTableFromCache();
+  } catch (e) {
+    showToast('Order search failed: ' + e.message, 'error');
+  }
+}
+
+async function clearOrderDateFilter() {
+  const inp = document.getElementById('orderDateFilter');
+  if (inp) inp.value = '';
+  await loadOrders();
+}
+
+function selectOrderRow(orderId) {
+  selectedOrderId = orderId;
+  const o = Array.isArray(ordersCache) ? ordersCache.find(x => x.orderId === orderId) : null;
+  renderOrderDetail(o);
+}
+
+function renderOrderDetail(o) {
+  const title = document.getElementById('orderDetailTitle');
+  const itemsEl = document.getElementById('orderDetailItems');
+  if (!title || !itemsEl) return;
+  if (!o) {
+    title.textContent = 'Order — Items';
+    itemsEl.innerHTML = '<div style="padding:16px;color:var(--text3)">No order data.</div>';
+    return;
+  }
+  title.textContent = `Order #${o.orderId} · ${orderVendorLabel(o)}`;
+  const items = Array.isArray(o.items) ? o.items : [];
+  itemsEl.innerHTML = items.map(it => `
+    <div class="activity-item">
+      <div class="activity-body">
+        <div class="activity-title">${it.partNumber || ''} ${it.partName || ''}</div>
+        <div class="activity-meta">Qty: ${it.requiredQuantity || 0} · ${it.vendorName || '—'} · ${it.vendorAddress || '—'}</div>
+      </div>
+      <span class="badge badge-orange">${it.requiredQuantity || 0} units</span>
+    </div>
+  `).join('') || '<div style="padding:16px;color:var(--text3)">No line items (all parts above threshold).</div>';
+}
+
+async function loadRacksPage() {
+  await loadParts();
+  const racks = await apiGetJson('/api/racks');
+  const kpis = document.querySelectorAll('#page-racks > .grid-3.mb-24 .kpi-card');
+  let cap = 0;
+  (racks || []).forEach(r => { cap += (r.maxCapacity || 0); });
+  const unitsOnRacks = partsCache.reduce((s, p) => {
+    if (p.storageRack && p.storageRack.rackId != null) return s + (p.currentQuantity || 0);
+    return s;
+  }, 0);
+  if (kpis[0]) kpis[0].querySelector('.kpi-value').textContent = String((racks || []).length);
+  if (kpis[1]) kpis[1].querySelector('.kpi-value').textContent = String(cap);
+  if (kpis[2]) kpis[2].querySelector('.kpi-value').textContent = String(unitsOnRacks);
+
+  const byRack = {};
+  partsCache.forEach(p => {
+    const rid = p.storageRack && p.storageRack.rackId != null ? p.storageRack.rackId : null;
+    if (rid == null) return;
+    if (!byRack[rid]) byRack[rid] = [];
+    byRack[rid].push(p);
+  });
+
+  const grid = document.getElementById('racksCardGrid');
+  if (!grid) return;
+  grid.innerHTML = (racks || []).map(r => {
+    const partsHere = byRack[r.rackId] || [];
+    const used = partsHere.reduce((s, p) => s + (p.currentQuantity || 0), 0);
+    const maxC = r.maxCapacity || 1;
+    const util = Math.min(100, Math.round((used / maxC) * 100));
+    const barClass = util > 100 ? 'red' : util > 85 ? '' : 'green';
+    const barBg = util > 85 && util <= 100 ? 'background:var(--accent)' : '';
+    return `<div class="card">
+      <div class="card-header">
+        <div class="card-title"><div class="card-title-icon">▦</div> Rack #${r.rackNumber}</div>
+        <span class="badge badge-green">Active</span>
+      </div>
+      <div class="card-body">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:12px">${r.wallLocation || ''} · Capacity: ${maxC}</div>
+        <div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:4px">
+            <span>Utilization</span><span>${util}%</span>
+          </div>
+          <div class="progress-wrap" style="width:100%">
+            <div class="progress-bar ${barClass}" style="width:${Math.min(util,100)}%;${barBg}"></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${partsHere.map(p => {
+            const st = (p.currentQuantity || 0) < (p.thresholdValue || 0) ? 'badge-red' : 'badge-green';
+            return `<div style="display:flex;justify-content:space-between;font-size:12px">
+              <span>${p.partNumber}</span><span class="badge ${st}">${p.currentQuantity} units</span>
+            </div>`;
+          }).join('') || '<div style="font-size:12px;color:var(--text3)">No parts assigned</div>'}
+        </div>
+      </div>
+    </div>`;
+  }).join('') || '<div class="card"><div class="card-body">No racks in database.</div></div>';
+}
+
+async function loadVendors() {
+  await loadParts();
+  const vendors = await apiGetJson('/api/vendors');
+  vendorsCache = vendors || [];
+  const title = document.getElementById('vendorsCardTitle');
+  if (title) title.textContent = 'All Vendors (' + (vendors || []).length + ')';
+  const vg = document.getElementById('vendorGrid');
+  if (vg) {
+    const partLists = await Promise.all((vendors || []).map(v =>
+      apiGetJson('/api/vendors/' + v.vendorId + '/parts').catch(() => [])
+    ));
+    vg.innerHTML = (vendors || []).map((v, i) => {
+      const plist = partLists[i] || [];
+      const partLine = plist.length
+        ? plist.map(p => p.partNumber).slice(0, 8).join(', ') + (plist.length > 8 ? ' …' : '')
+        : 'No linked parts';
+      return `
+      <div class="vendor-card" onclick="selectVendor(${v.vendorId})">
+        <div class="vendor-name">${v.vendorName || ''}</div>
+        <div class="vendor-addr">${v.vendorAddress || ''}</div>
+        <div class="vendor-parts-count">Supplies: ${partLine}</div>
+        <div class="vendor-parts-count">📞 ${v.contactNumber || '—'} · ${v.email || ''}</div>
+        <div style="margin-top:10px;display:flex;justify-content:flex-end;gap:8px">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="prepareEditVendorFromId(${v.vendorId}, event)">Edit</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteVendorById(${v.vendorId})">Delete</button>
+        </div>
+      </div>`;
+    }).join('') || '<div style="padding:16px;color:var(--text3)">No vendors.</div>';
+  }
+
+  const mapBody = document.getElementById('vendorMapTableBody');
+  if (mapBody) {
+    const rows = [];
+    for (const p of partsCache) {
+      if (!p.partId) continue;
+      try {
+        const vs = await apiGetJson('/api/vendors/by-part/' + p.partId);
+        (vs || []).forEach((v, i) => {
+          const typ = i === 0 ? '<span class="badge badge-gold">Primary</span>' : '<span class="badge badge-gray">Secondary</span>';
+          rows.push(`<tr><td><span class="part-num">${p.partNumber}</span></td><td>${v.vendorName || ''}</td><td>${typ}</td></tr>`);
+        });
+      } catch (_) { /* skip */ }
+    }
+    mapBody.innerHTML = rows.join('') || '<tr><td colspan="3">No mappings loaded.</td></tr>';
+  }
+}
+
+function filterVendorCards(input) {
+  const q = (input.value || '').toLowerCase();
+  document.querySelectorAll('#vendorGrid .vendor-card').forEach(el => {
+    el.style.display = !q || el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+async function loadReportsPage() {
+  await loadParts();
+  const todayIso = getTodayDate();
+  let daily = {};
+  try {
+    daily = await apiGetJson('/api/reports/daily/' + encodeURIComponent(todayIso)) || {};
+    console.log('[ASPAS] Daily report', todayIso, daily);
+  } catch (_) { daily = {}; }
+  lastDailyReport = daily;
+
+  const y = new Date().getFullYear();
+  const m = new Date().getMonth() + 1;
+  let monthly = {};
+  try {
+    monthly = await apiGetJson(`/api/reports/monthly/${y}/${m}`) || {};
+    console.log('[ASPAS] Monthly report', y, m, monthly);
+  } catch (_) { monthly = {}; }
+  lastMonthlyReport = monthly;
+
+  const dGrid = document.querySelectorAll('#report-daily .kpi-grid .kpi-card');
+  if (dGrid[0]) dGrid[0].querySelector('.kpi-value').innerHTML = '<span class="unit">₹</span>' + Math.round(Number(daily?.totalRevenue) || 0).toLocaleString();
+  if (dGrid[1]) dGrid[1].querySelector('.kpi-value').textContent = String(daily?.transactionCount ?? 0);
+  const tc = Number(daily?.transactionCount) || 0;
+  const avg = tc > 0 ? (Number(daily?.totalRevenue) || 0) / tc : 0;
+  if (dGrid[2]) dGrid[2].querySelector('.kpi-value').innerHTML = '<span class="unit">₹</span>' + Math.round(avg).toLocaleString();
+  const tops = Array.isArray(daily?.topSellingParts) ? daily.topSellingParts : [];
+  const top1 = tops[0];
+  if (dGrid[3]) {
+    dGrid[3].querySelector('.kpi-value').style.fontSize = '18px';
+    dGrid[3].querySelector('.kpi-value').textContent = top1 ? top1.partNumber : '—';
+    const meta = dGrid[3].querySelector('.kpi-meta');
+    if (meta) meta.textContent = top1 ? `${top1.qtySold || 0} units sold` : 'No sales yet';
+  }
+
+  let txns = [];
+  try {
+    const raw = await apiGetJson('/api/sales/transactions?date=' + encodeURIComponent(todayIso));
+    txns = Array.isArray(raw) ? raw : [];
+  } catch (_) { txns = []; }
+  let hourlyBuckets;
+  let hourLabels;
+  if (Array.isArray(daily?.hourlyDataPoints) && daily.hourlyDataPoints.length) {
+    const hb = hourlyBucketsFromReport(daily);
+    hourlyBuckets = hb.buckets;
+    hourLabels = hb.hourLabels;
+  } else {
+    const agg = aggregateHourlyFromTxns(txns);
+    hourlyBuckets = agg.buckets;
+    hourLabels = agg.HOURS;
+  }
+  renderHourlyChart(hourlyBuckets, hourLabels);
+  renderTopPartsList((daily?.topSellingParts || []).map(tp => ({
+    partNumber: tp?.partNumber,
+    qtySold: tp?.qtySold,
+    revenue: tp?.revenue
+  })));
+
+  const mGrid = document.querySelectorAll('#report-monthly .kpi-grid .kpi-card');
+  if (mGrid[0]) mGrid[0].querySelector('.kpi-value').innerHTML = '<span class="unit">₹</span>' + Math.round(Number(monthly?.totalRevenue) || 0).toLocaleString();
+  if (mGrid[1]) mGrid[1].querySelector('.kpi-value').innerHTML = '<span class="unit">₹</span>' + Math.round(Number(monthly?.averageDailyRevenue) || 0).toLocaleString();
+  const dps = Array.isArray(monthly?.dailyDataPoints) ? monthly.dailyDataPoints : [];
+  let peakDay = null, peakRev = 0;
+  dps.forEach(dp => {
+    if (!dp) return;
+    const r = dp.revenue != null ? Number(dp.revenue) : 0;
+    if (r > peakRev) { peakRev = r; peakDay = dp.day; }
+  });
+  if (mGrid[2]) {
+    mGrid[2].querySelector('.kpi-value').textContent = peakDay != null ? `Day ${peakDay}` : '—';
+    const meta = mGrid[2].querySelector('.kpi-meta');
+    if (meta) meta.textContent = peakRev ? '₹' + Math.round(peakRev).toLocaleString() : '';
+  }
+  if (mGrid[3]) {
+    mGrid[3].querySelector('.kpi-value').style.fontSize = '16px';
+    mGrid[3].querySelector('.kpi-value').textContent = monthly?.reportId || '—';
+    const meta = mGrid[3].querySelector('.kpi-meta');
+    if (meta) meta.textContent = `${y}${String(m).padStart(2,'0')}`;
+  }
+
+  const mt = document.querySelector('#report-monthly .card .card-header .card-title');
+  if (mt) {
+    const label = new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+    mt.innerHTML = `<div class="card-title-icon">📈</div> Monthly Revenue — ${label}`;
+  }
+  renderMonthlyChart(Array.isArray(monthly?.dailyDataPoints) ? monthly.dailyDataPoints : []);
+}
+
+// =====================================================
+// REPORT TOGGLE
+// =====================================================
+function switchReport(type, btn) {
+  document.querySelectorAll('#page-reports .toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('report-daily').style.display = type === 'daily' ? 'block' : 'none';
+  document.getElementById('report-monthly').style.display = type === 'monthly' ? 'block' : 'none';
+  if (type === 'monthly') setTimeout(() => renderMonthlyChart(Array.isArray(lastMonthlyReport?.dailyDataPoints) ? lastMonthlyReport.dailyDataPoints : []), 50);
+}
+
+// =====================================================
+// JIT RECALC
+// =====================================================
+async function recalcJIT() {
+  showToast('↻ POST /api/jit/calculate ...', 'info');
+  try {
+    const res = await apiPostJson('/api/jit/calculate', {});
+    const n = res?.partsUpdated != null ? res.partsUpdated : '?';
+    showToast(`✓ P2.0 — ${n} thresholds updated`, 'success');
+    await loadParts();
+    if (document.getElementById('page-parts')?.classList.contains('active')) renderPartsTable();
+    renderJitPageKpis();
+    renderJIT();
+    await refreshDashboard();
+  } catch (e) {
+    showToast('JIT calc failed: ' + e.message, 'error');
+  }
+}
+
+// =====================================================
+// MODAL
+// =====================================================
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+
+// Close on backdrop
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => {
+    if (e.target === o) o.classList.remove('active');
+  });
+});
+
+// =====================================================
+// TOAST
+// =====================================================
+let toastCount = 0;
+
+function showToast(msg, type = 'info') {
+  const colors = { success: 'var(--green)', warning: 'var(--accent)', error: 'var(--red)', info: 'var(--blue)' };
+  const icons  = { success: '✓', warning: '⚠', error: '✕', info: 'ℹ' };
+  const container = document.getElementById('toastContainer');
+  const id = 'toast-' + (++toastCount);
+  const div = document.createElement('div');
+  div.className = 'toast';
+  div.id = id;
+  div.style.setProperty('--toast-color', colors[type]);
+  div.innerHTML = `<span style="color:${colors[type]};font-weight:700">${icons[type]}</span> ${msg}`;
+  container.appendChild(div);
+  setTimeout(() => div.remove(), 3500);
+}
+
+// =====================================================
+// TABLE FILTER
+// =====================================================
+function filterTable(input, tableId) {
+  const val = input.value.toLowerCase();
+  document.querySelectorAll(`#${tableId} tbody tr`).forEach(tr => {
+    tr.style.display = tr.textContent.toLowerCase().includes(val) ? '' : 'none';
+  });
+}
+
+// =====================================================
+// VENDOR SELECT
+// =====================================================
+function selectVendor(vendorId) {
+  const v = (vendorsCache || []).find(x => x.vendorId === vendorId);
+  const name = v ? v.vendorName : 'Vendor #' + vendorId;
+  showToast(name + ' — click Edit to update', 'info');
+}
+
+// =====================================================
+// INIT
+// =====================================================
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('saleModalPartSelect')?.addEventListener('change', updateSaleModalRevenueEst);
+  document.getElementById('saleModalQty')?.addEventListener('input', updateSaleModalRevenueEst);
+
+  document.querySelectorAll('.kpi-card').forEach((el, i) => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(12px)';
+    el.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    setTimeout(() => {
+      el.style.opacity = '1';
+      el.style.transform = 'translateY(0)';
+    }, 80 * i);
+  });
+  (async () => {
+    try {
+      await refreshDashboard();
+      await loadParts();
+      populateSaleSelect();
+      await loadTodayTransactions();
+    } catch (e) {
+      console.error(e);
+      showToast('Could not reach API — is the Spring Boot server running?', 'error');
+    }
+  })();
+});
+</script>
+</body>
+</html>

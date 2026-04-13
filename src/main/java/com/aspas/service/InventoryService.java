@@ -78,12 +78,32 @@ public class InventoryService {
 
         log.info("Updating part: {}", partNumber);
 
-        existing.setPartName(updatedPart.getPartName());
-        existing.setUnitPrice(updatedPart.getUnitPrice());
-        existing.setSizeCategory(updatedPart.getSizeCategory());
+        StorageRack proposedRack = updatedPart.getStorageRack() != null
+            ? resolveStorageRack(updatedPart.getStorageRack())
+            : existing.getStorageRack();
+        int proposedQty = updatedPart.getCurrentQuantity() != null
+            ? updatedPart.getCurrentQuantity()
+            : (existing.getCurrentQuantity() != null ? existing.getCurrentQuantity() : 0);
 
+        assertRackHasCapacity(proposedRack, proposedQty, existing.getPartId());
+
+        if (updatedPart.getPartName() != null) {
+            existing.setPartName(updatedPart.getPartName());
+        }
+        if (updatedPart.getUnitPrice() != null) {
+            existing.setUnitPrice(updatedPart.getUnitPrice());
+        }
+        if (updatedPart.getSizeCategory() != null) {
+            existing.setSizeCategory(updatedPart.getSizeCategory());
+        }
         if (updatedPart.getCurrentQuantity() != null) {
             existing.setCurrentQuantity(updatedPart.getCurrentQuantity());
+        }
+        if (updatedPart.getThresholdValue() != null) {
+            existing.setThresholdValue(updatedPart.getThresholdValue());
+        }
+        if (updatedPart.getStorageRack() != null) {
+            existing.setStorageRack(proposedRack);
         }
 
         return sparePartRepository.save(existing);
@@ -138,7 +158,43 @@ public class InventoryService {
 
         log.info("Assigning part {} to rack #{}", partNumber, rackNumber);
 
+        int qty = part.getCurrentQuantity() != null ? part.getCurrentQuantity() : 0;
+        assertRackHasCapacity(rack, qty, part.getPartId());
         part.setStorageRack(rack);
         return sparePartRepository.save(part);
+    }
+
+    private StorageRack resolveStorageRack(StorageRack rack) {
+        if (rack == null) {
+            return null;
+        }
+        if (rack.getRackId() != null) {
+            return storageRackRepository.findById(rack.getRackId())
+                .orElseThrow(() -> new IllegalArgumentException("Rack not found: id=" + rack.getRackId()));
+        }
+        if (rack.getRackNumber() != null) {
+            return storageRackRepository.findByRackNumber(rack.getRackNumber())
+                .orElseThrow(() -> new IllegalArgumentException("Rack not found: #" + rack.getRackNumber()));
+        }
+        throw new IllegalArgumentException("Storage rack must include rackId or rackNumber");
+    }
+
+    private void assertRackHasCapacity(StorageRack rack, int proposedQuantity, Long excludePartId) {
+        if (rack == null) {
+            return;
+        }
+        StorageRack full = rack.getRackId() != null
+            ? storageRackRepository.findById(rack.getRackId())
+                .orElseThrow(() -> new IllegalArgumentException("Rack not found: id=" + rack.getRackId()))
+            : resolveStorageRack(rack);
+        int max = full.getMaxCapacity() != null ? full.getMaxCapacity() : 100;
+        long others = sparePartRepository.sumCurrentQuantityOnRackExcluding(full.getRackId(), excludePartId);
+        long total = others + (long) Math.max(0, proposedQuantity);
+        if (total > max) {
+            throw new IllegalArgumentException(String.format(
+                "Rack #%d exceeds capacity: %d units on rack + %d proposed > max %d",
+                full.getRackNumber(), others, proposedQuantity, max
+            ));
+        }
     }
 }

@@ -1,5 +1,18 @@
 package com.aspas.exception;
 
+/**
+ * ================================================================
+ * PartNotFoundException
+ * ================================================================
+ *
+ * Thrown when a spare part lookup fails.
+ *
+ * UML Traceability:
+ *   - Sequence Diagram: Message #2 "SC → SP : getPartDetails()"
+ *     If part number does not exist in D1 Inventory File
+ *
+ * ================================================================
+ */
 public class PartNotFoundException extends RuntimeException {
 
     private final String partNumber;

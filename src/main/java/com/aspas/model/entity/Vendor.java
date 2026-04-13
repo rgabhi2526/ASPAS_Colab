@@ -6,6 +6,22 @@ import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+/**
+ * ================================================================
+ * Vendor Entity
+ * ================================================================
+ * 
+ * UML Traceability:
+ *   - Class Diagram: Vendor class
+ *   - Relationship: SparePart *──1..* Vendor (supplied by)
+ *   - Database: vendors table (MySQL)
+ *   - DFD Store: D3 Vendor Directory
+ * 
+ * Represents a spare parts manufacturer/supplier.
+ * Multiple vendors can supply the same part (many-to-many).
+ * 
+ * ================================================================
+ */
 @Entity
 @Table(name = "vendors")
 @Data
@@ -48,10 +64,18 @@ public class Vendor {
         updatedAt = LocalDateTime.now();
     }
 
+    /**
+     * Get vendor's full address.
+     * @return vendor address
+     */
     public String getVendorAddress() {
         return vendorAddress;
     }
 
+    /**
+     * Get vendor details as formatted string.
+     * @return Vendor information
+     */
     public String getVendorDetails() {
         return String.format(
             "Vendor: %s | Address: %s | Contact: %s | Email: %s",
@@ -59,6 +83,9 @@ public class Vendor {
         );
     }
 
+    /**
+     * Update vendor contact information.
+     */
     public void updateContactInfo(String phone, String emailAddr) {
         this.contactNumber = phone;
         this.email = emailAddr;

@@ -5,16 +5,43 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * ================================================================
+ * GlobalExceptionHandler — Unified Error Response Handler
+ * ================================================================
+ *
+ * Catches all exceptions thrown by controllers/services and
+ * converts them into structured JSON error responses.
+ *
+ * Ensures consistent error format across all API endpoints:
+ * {
+ *   "timestamp": "2026-03-15T14:30:00",
+ *   "status": 404,
+ *   "error": "Not Found",
+ *   "message": "Spare part not found with part number: SP-XXX-999",
+ *   "path": "/api/sales"
+ * }
+ *
+ * ================================================================
+ */
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
 
+    /**
+     * Handle PartNotFoundException.
+     *
+     * UML: Thrown when Seq Msg #2 findByPartNumber() fails.
+     *
+     * @return 404 Not Found
+     */
     @ExceptionHandler(PartNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handlePartNotFound(
             PartNotFoundException ex
@@ -23,6 +50,13 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    /**
+     * Handle InsufficientStockException.
+     *
+     * UML: Thrown when Seq Msg #4 updateQuantity() fails validation.
+     *
+     * @return 400 Bad Request
+     */
     @ExceptionHandler(InsufficientStockException.class)
     public ResponseEntity<Map<String, Object>> handleInsufficientStock(
             InsufficientStockException ex
@@ -37,6 +71,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
+    /**
+     * Handle VendorNotFoundException.
+     *
+     * UML: Thrown when Seq Msg #19 getVendorAddress() fails.
+     *
+     * @return 404 Not Found
+     */
     @ExceptionHandler(VendorNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleVendorNotFound(
             VendorNotFoundException ex
@@ -45,6 +86,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    /**
+     * Handle OrderNotFoundException.
+     *
+     * @return 404 Not Found
+     */
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleOrderNotFound(
             OrderNotFoundException ex
@@ -53,6 +99,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    /**
+     * Handle validation errors (@Valid annotation failures).
+     *
+     * @return 400 Bad Request with field-level errors
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationErrors(
             MethodArgumentNotValidException ex
@@ -72,6 +123,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
+    /**
+     * Handle IllegalArgumentException (business rule violations).
+     *
+     * @return 400 Bad Request
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleIllegalArgument(
             IllegalArgumentException ex
@@ -80,6 +136,25 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    /**
+     * FK violations (e.g. delete vendor still linked to parts).
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrity(
+            DataIntegrityViolationException ex
+    ) {
+        log.error("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
+        return buildErrorResponse(
+            HttpStatus.CONFLICT,
+            "Cannot complete operation: record is still referenced by other data."
+        );
+    }
+
+    /**
+     * Handle all other unexpected exceptions.
+     *
+     * @return 500 Internal Server Error
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(
             Exception ex
@@ -91,6 +166,13 @@ public class GlobalExceptionHandler {
         );
     }
 
+    // ══════════════════════════════════════════
+    //  HELPER METHODS
+    // ══════════════════════════════════════════
+
+    /**
+     * Build a standard error response.
+     */
     private ResponseEntity<Map<String, Object>> buildErrorResponse(
             HttpStatus status, String message
     ) {
@@ -99,6 +181,9 @@ public class GlobalExceptionHandler {
             .body(buildErrorBody(status, message));
     }
 
+    /**
+     * Build the error response body map.
+     */
     private Map<String, Object> buildErrorBody(HttpStatus status, String message) {
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now().toString());

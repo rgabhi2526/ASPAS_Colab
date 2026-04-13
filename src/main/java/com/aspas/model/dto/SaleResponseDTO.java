@@ -4,6 +4,19 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * ================================================================
+ * SaleResponseDTO
+ * ================================================================
+ * 
+ * Response from sale processing.
+ * Returned via REST API: 201 Created
+ * 
+ * UML Traceability:
+ *   - Sequence Diagram: Message #8 "SC → Owner : success"
+ * 
+ * ================================================================
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
