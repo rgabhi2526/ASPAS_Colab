@@ -918,7 +918,7 @@ function OrdersScreen() {
                   <tr key={o.orderId} onClick={() => setDetailOrderId(o.orderId)} style={{ cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBEB'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                     <TD mono style={{ fontWeight: 500 }}>#{o.orderId}</TD>
                     <TD style={{ color: 'var(--slate-500)' }}>{o.orderDate}</TD>
-                    <TD style={{ fontWeight: 500, color: 'var(--slate-900)' }}>{o.vendor?.vendorName || o.vendorName || '—'}</TD>
+                    <TD style={{ fontWeight: 500, color: 'var(--slate-900)' }}>{o.items?.[0]?.vendorName || '—'}</TD>
                     <TD mono>{o.totalItems ?? o.items?.length ?? '—'}</TD>
                     <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--slate-50)' }}>
                       <span style={{ fontSize: 12, color: o.printed ? '#059669' : 'var(--slate-400)' }}>{o.printed ? 'Yes' : 'No'}</span>
@@ -964,7 +964,7 @@ function OrderDetailDrawer({ orderId, onClose, setToast }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{order.vendor?.vendorName || order.vendorName || 'Vendor'}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{order.items?.[0]?.vendorName || 'Vendor'}</div>
             <div style={{ fontSize: 13, color: 'var(--slate-500)' }}>{order.orderDate}</div>
           </div>
           <OrderBadge status={order.status || (order.printed ? 'Received' : 'Pending')} />
