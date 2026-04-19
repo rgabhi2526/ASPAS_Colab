@@ -65,6 +65,21 @@ public interface DailyRevenueReportRepository extends MongoRepository<DailyReven
     List<DailyRevenueReportDoc> findByDateRange(LocalDate startDate, LocalDate endDate);
 
     /**
+     * Find the most recently generated report for a given date (handles duplicates).
+     *
+     * @param reportDate date of the report
+     * @return most recent matching report
+     */
+    Optional<DailyRevenueReportDoc> findTopByReportDateOrderByGeneratedAtDesc(LocalDate reportDate);
+
+    /**
+     * Delete all reports for a given date (used before regeneration to remove duplicates).
+     *
+     * @param reportDate date to clear
+     */
+    void deleteByReportDate(LocalDate reportDate);
+
+    /**
      * Find all reports sorted by date descending.
      *
      * @return all daily reports, newest first

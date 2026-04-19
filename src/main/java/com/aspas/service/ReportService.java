@@ -11,10 +11,8 @@ import com.aspas.model.dto.ReportResponseDTO.DailyDataPointDTO;
 import com.aspas.model.dto.ReportResponseDTO.HourlyDataPointDTO;
 import com.aspas.model.dto.ReportResponseDTO.TopSellingPartDTO;
 import com.aspas.repository.mongo.DailyRevenueReportRepository;
-import com.aspas.repository.mongo.DailyRevenueAggregate;
 import com.aspas.repository.mongo.MonthlyGraphReportRepository;
 import com.aspas.repository.mongo.SalesTransactionRepository;
-import com.aspas.repository.mongo.TopSellingAggregate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,8 +21,11 @@ import java.time.YearMonth;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -86,7 +87,7 @@ public class ReportService {
         log.info("═══ PROCESS 4.0: Daily Revenue Report for {} (MongoDB daily_revenue_reports) ═══", date);
 
         Optional<DailyRevenueReportDoc> existing =
-            dailyRevenueReportRepository.findByReportDate(date);
+            dailyRevenueReportRepository.findTopByReportDateOrderByGeneratedAtDesc(date);
 
         if (existing.isPresent()) {
             log.info("  Loaded persisted report: {}", existing.get().getReportId());
@@ -116,22 +117,9 @@ public class ReportService {
         report.setDailyTotal(txs.stream().mapToDouble(ReportService::lineRevenue).sum());
         report.setTransactionCount(txs.size());
 
-        // Get top selling parts for the day
-        List<TopSellingAggregate> topParts =
-            salesTransactionRepository.aggregateTopSellingParts(startOfDay, endOfDay);
-
-        if (topParts != null) {
-            List<TopSellingPart> topSellingParts = topParts.stream()
-                .filter(Objects::nonNull)
-                .map(tp -> TopSellingPart.builder()
-                    .partNumber(tp.getId())
-                    .qtySold(tp.getTotalQty() != null ? tp.getTotalQty().intValue() : 0)
-                    .revenue(tp.getTotalRevenue() != null ? tp.getTotalRevenue() : 0.0)
-                    .build()
-                )
-                .collect(Collectors.toList());
-            report.setTopSellingParts(topSellingParts);
-        }
+        // Compute top sellers from already-fetched transactions.
+        // This avoids a Spring Data Mongo aggregation projection edge case observed on some setups.
+        report.setTopSellingParts(computeTopSellingPartsFromTransactions(txs, 10));
 
         // ─────────────────────────────────────────────
         // SEQUENCE DIAGRAM: Message #29
@@ -170,7 +158,7 @@ public class ReportService {
             month, year);
 
         Optional<MonthlyGraphReportDoc> existing =
-            monthlyGraphReportRepository.findByTargetMonthAndTargetYear(month, year);
+            monthlyGraphReportRepository.findTopByTargetMonthAndTargetYearOrderByGeneratedAtDesc(month, year);
 
         if (existing.isPresent()) {
             log.info("  Loaded persisted report: {}", existing.get().getReportId());
@@ -191,28 +179,9 @@ public class ReportService {
         Date startOfMonth = businessDateBounds.startOfCalendarDay(yearMonth.atDay(1));
         Date endOfMonth = businessDateBounds.endOfCalendarDay(yearMonth.atEndOfMonth());
 
-        // Aggregate daily revenues for the month
-        List<DailyRevenueAggregate> dailyAggregates =
-            salesTransactionRepository.aggregateDailyRevenueForMonth(
-                startOfMonth, endOfMonth
-            );
-
-        // Convert aggregates to data points
-        List<DailyDataPoint> dataPoints = new ArrayList<>();
-
-        if (dailyAggregates != null) {
-            for (DailyRevenueAggregate agg : dailyAggregates) {
-                if (agg == null) {
-                    continue;
-                }
-                int dayNum = agg.getId() != null ? agg.getId().intValue() : 0;
-                dataPoints.add(DailyDataPoint.builder()
-                    .day(dayNum)
-                    .revenue(agg.getDailyRevenue() != null ? agg.getDailyRevenue() : 0.0)
-                    .build()
-                );
-            }
-        }
+        List<SalesTransactionDoc> txs =
+            salesTransactionRepository.findByTransactionDateBetween(startOfMonth, endOfMonth);
+        List<DailyDataPoint> dataPoints = computeDailyDataPointsFromTransactions(txs);
 
         report.setDailyDataPoints(dataPoints);
 
@@ -240,9 +209,8 @@ public class ReportService {
     public ReportResponseDTO regenerateDailyReport(LocalDate date) {
         log.info("Force regenerating daily report for: {}", date);
 
-        // Delete existing report if present
-        dailyRevenueReportRepository.findByReportDate(date)
-            .ifPresent(dailyRevenueReportRepository::delete);
+        // Delete all duplicates for the day before regenerating.
+        dailyRevenueReportRepository.deleteByReportDate(date);
 
         return getDailyRevenueReport(date);
     }
@@ -257,8 +225,7 @@ public class ReportService {
     public ReportResponseDTO regenerateMonthlyReport(int year, int month) {
         log.info("Force regenerating monthly report for: {}/{}", month, year);
 
-        monthlyGraphReportRepository.findByTargetMonthAndTargetYear(month, year)
-            .ifPresent(monthlyGraphReportRepository::delete);
+        monthlyGraphReportRepository.deleteByTargetMonthAndTargetYear(month, year);
 
         return getMonthlyGraphReport(year, month);
     }
@@ -284,18 +251,7 @@ public class ReportService {
         double totalRev = txs.stream().mapToDouble(ReportService::lineRevenue).sum();
         int txCount = txs.size();
 
-        List<TopSellingAggregate> topAgg = salesTransactionRepository.aggregateTopSellingParts(s, e);
-        List<TopSellingPartDTO> tops = new ArrayList<>();
-        if (topAgg != null) {
-            tops = topAgg.stream()
-                .filter(Objects::nonNull)
-                .map(tp -> TopSellingPartDTO.builder()
-                    .partNumber(tp.getId())
-                    .qtySold(tp.getTotalQty() != null ? tp.getTotalQty().intValue() : 0)
-                    .revenue(tp.getTotalRevenue() != null ? tp.getTotalRevenue() : 0.0)
-                    .build())
-                .collect(Collectors.toList());
-        }
+        List<TopSellingPartDTO> tops = computeTopSellingPartDTOsFromTransactions(txs, 10);
 
         List<HourlyDataPointDTO> hourly = buildHourlyFromTransactions(txs);
 
@@ -382,5 +338,82 @@ public class ReportService {
         }
         Double r = t.getRevenueAmount();
         return r != null ? r : 0.0;
+    }
+
+    private List<TopSellingPart> computeTopSellingPartsFromTransactions(
+            List<SalesTransactionDoc> txs,
+            int limit
+    ) {
+        if (txs == null || txs.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, TopPartAccumulator> acc = new HashMap<>();
+        for (SalesTransactionDoc t : txs) {
+            if (t == null || t.getPartNumber() == null) {
+                continue;
+            }
+            String partNumber = t.getPartNumber();
+            TopPartAccumulator bucket = acc.computeIfAbsent(partNumber, k -> new TopPartAccumulator());
+            bucket.partNumber = partNumber;
+            bucket.qty += t.getQuantitySold() != null ? t.getQuantitySold() : 0;
+            bucket.revenue += lineRevenue(t);
+        }
+
+        return acc.values().stream()
+            .sorted(Comparator.comparingInt((TopPartAccumulator a) -> a.qty).reversed())
+            .limit(Math.max(0, limit))
+            .map(a -> TopSellingPart.builder()
+                .partNumber(a.partNumber)
+                .qtySold(a.qty)
+                .revenue(a.revenue)
+                .build())
+            .collect(Collectors.toList());
+    }
+
+    private List<TopSellingPartDTO> computeTopSellingPartDTOsFromTransactions(
+            List<SalesTransactionDoc> txs,
+            int limit
+    ) {
+        return computeTopSellingPartsFromTransactions(txs, limit).stream()
+            .map(p -> TopSellingPartDTO.builder()
+                .partNumber(p.getPartNumber())
+                .qtySold(p.getQtySold())
+                .revenue(p.getRevenue())
+                .build())
+            .collect(Collectors.toList());
+    }
+
+    private static final class TopPartAccumulator {
+        private String partNumber;
+        private int qty;
+        private double revenue;
+    }
+
+    private List<DailyDataPoint> computeDailyDataPointsFromTransactions(List<SalesTransactionDoc> txs) {
+        if (txs == null || txs.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Integer, Double> byDay = new HashMap<>();
+        for (SalesTransactionDoc t : txs) {
+            if (t == null || t.getTransactionDate() == null) {
+                continue;
+            }
+            ZonedDateTime zdt = businessDateBounds.toZoned(t.getTransactionDate());
+            if (zdt == null) {
+                continue;
+            }
+            int day = zdt.getDayOfMonth();
+            byDay.merge(day, lineRevenue(t), Double::sum);
+        }
+
+        return byDay.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .map(e -> DailyDataPoint.builder()
+                .day(e.getKey())
+                .revenue(e.getValue())
+                .build())
+            .collect(Collectors.toList());
     }
 }

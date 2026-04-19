@@ -66,6 +66,26 @@ public interface MonthlyGraphReportRepository extends MongoRepository<MonthlyGra
     List<MonthlyGraphReportDoc> findByTargetYear(Integer targetYear);
 
     /**
+     * Find the most recently generated report for a given month/year (handles duplicates).
+     *
+     * @param targetMonth month (1-12)
+     * @param targetYear year
+     * @return most recent matching report
+     */
+    Optional<MonthlyGraphReportDoc> findTopByTargetMonthAndTargetYearOrderByGeneratedAtDesc(
+        Integer targetMonth,
+        Integer targetYear
+    );
+
+    /**
+     * Delete all reports for a given month/year (used before regeneration to remove duplicates).
+     *
+     * @param targetMonth month (1-12)
+     * @param targetYear year
+     */
+    void deleteByTargetMonthAndTargetYear(Integer targetMonth, Integer targetYear);
+
+    /**
      * Find all reports sorted by year and month descending.
      *
      * @return all monthly reports, newest first
