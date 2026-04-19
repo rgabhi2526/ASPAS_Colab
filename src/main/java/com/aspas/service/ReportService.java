@@ -326,7 +326,7 @@ public class ReportService {
             }
         }
         List<HourlyDataPointDTO> out = new ArrayList<>();
-        for (int h = 9; h <= 15; h++) {
+        for (int h = 8; h <= 20; h++) {
             out.add(HourlyDataPointDTO.builder().hour(h).revenue(byHour[h]).build());
         }
         return out;
