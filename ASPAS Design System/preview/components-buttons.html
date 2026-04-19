@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 20px; background: #fff; font-family: var(--font-sans); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #9CA3AF; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="section-label">Buttons</div>
+<div class="row">
+  <button class="btn btn-primary">Add Part</button>
+  <button class="btn btn-secondary">Export</button>
+  <button class="btn btn-ghost">Cancel</button>
+  <button class="btn btn-danger">Delete</button>
+</div>
+<div class="row">
+  <button class="btn btn-primary" style="font-size:12px;padding:6px 12px">Small Primary</button>
+  <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px">Small Secondary</button>
+  <button class="btn btn-primary" disabled style="opacity:0.45;cursor:not-allowed">Disabled</button>
+</div>
+<div class="row">
+  <button class="btn btn-primary" style="padding:10px 20px;font-size:14px">Generate Report</button>
+  <button class="btn btn-secondary" style="padding:10px 20px;font-size:14px">Recalculate JIT</button>
+</div>
+</body>
+</html>

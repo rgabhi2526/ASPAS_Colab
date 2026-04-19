@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 20px; background: #F9FAFB; font-family: var(--font-sans); }
+  .row { display: flex; gap: 20px; align-items: center; margin-bottom: 16px; }
+  .box { padding: 20px 28px; background: white; border-radius: 8px; font-size: 13px; color: #374151; min-width: 160px; text-align: center; }
+  .lbl { font-size: 10px; color: #9CA3AF; font-family: 'DM Mono', monospace; margin-top: 8px; }
+  .section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #9CA3AF; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div class="section-label">Elevation / Shadow System</div>
+<div class="row">
+  <div>
+    <div class="box" style="box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)">Card</div>
+    <div class="lbl">shadow-card</div>
+  </div>
+  <div>
+    <div class="box" style="box-shadow: 0 4px 12px rgba(0,0,0,0.10)">Panel</div>
+    <div class="lbl">shadow-panel</div>
+  </div>
+  <div>
+    <div class="box" style="box-shadow: 0 8px 24px rgba(0,0,0,0.12)">Dropdown</div>
+    <div class="lbl">shadow-dropdown</div>
+  </div>
+  <div>
+    <div class="box" style="box-shadow: 0 20px 48px rgba(0,0,0,0.18)">Modal</div>
+    <div class="lbl">shadow-modal</div>
+  </div>
+</div>
+</body>
+</html>

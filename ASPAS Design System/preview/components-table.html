@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 16px; background: #fff; font-family: var(--font-sans); }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #9CA3AF; background: #F3F4F6; padding: 8px 12px; text-align: left; border-bottom: 1px solid #E5E7EB; }
+  td { font-size: 13px; color: #374151; padding: 10px 12px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
+  tr:hover td { background: #FFFBEB; }
+  .mono { font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 0.04em; color: #374151; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .in-stock { background: #F0FDF4; color: #15803D; }
+  .low-stock { background: #FFFBEB; color: #B45309; }
+  .critical  { background: #FFF1F2; color: #DC2626; }
+</style>
+</head>
+<body>
+<table>
+  <thead>
+    <tr>
+      <th>Part No.</th>
+      <th>Part Name</th>
+      <th>Qty</th>
+      <th>Threshold</th>
+      <th>Price</th>
+      <th>Location</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="mono">SP-BRK-001</span></td>
+      <td>Brake Pad – Front (Ceramic)</td>
+      <td><span class="mono">25</span></td>
+      <td><span class="mono">10</span></td>
+      <td><span class="mono">₹450.00</span></td>
+      <td>Rack #1 · North A</td>
+      <td><span class="badge in-stock">In Stock</span></td>
+    </tr>
+    <tr>
+      <td><span class="mono">SP-ENG-002</span></td>
+      <td>Timing Belt Kit</td>
+      <td><span class="mono">5</span></td>
+      <td><span class="mono">4</span></td>
+      <td><span class="mono">₹2,800.00</span></td>
+      <td>Rack #3 · East A</td>
+      <td><span class="badge low-stock">Low Stock</span></td>
+    </tr>
+    <tr>
+      <td><span class="mono">SP-ELC-001</span></td>
+      <td>Alternator 12V</td>
+      <td><span class="mono">2</span></td>
+      <td><span class="mono">3</span></td>
+      <td><span class="mono">₹4,500.00</span></td>
+      <td>Rack #5 · South A</td>
+      <td><span class="badge critical">Critical</span></td>
+    </tr>
+  </tbody>
+</table>
+</body>
+</html>

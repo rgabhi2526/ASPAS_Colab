@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASPAS Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: #F9FAFB;
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+}
+:root {
+  --navy-900: #0F1C2E; --navy-800: #162436; --navy-700: #1E3045; --navy-500: #34587E;
+  --amber: #F59E0B; --amber-dark: #D97706; --amber-light: #FFFBEB; --amber-100: #FEF3C7;
+  --slate-50: #F9FAFB; --slate-100: #F3F4F6; --slate-200: #E5E7EB; --slate-300: #D1D5DB;
+  --slate-400: #9CA3AF; --slate-500: #6B7280; --slate-600: #4B5563; --slate-700: #374151; --slate-900: #111827;
+  --green-50: #F0FDF4; --green-700: #15803D;
+  --red-50: #FFF1F2; --red-600: #DC2626;
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+}
+@keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+.skeleton {
+  background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 4px;
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ── Config ─────────────────────────────────────────────────────────────────
+const API = 'http://localhost:8080/api';
+
+// ── API helpers ────────────────────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json', ...opts.headers },
+    ...opts,
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => res.statusText);
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+function useApi(path, deps = []) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const refresh = useCallback(() => {
+    setLoading(true); setError(null);
+    apiFetch(path)
+      .then(d => { setData(d); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, [path]);
+  useEffect(() => { refresh(); }, [refresh, ...deps]);
+  return { data, loading, error, refresh };
+}
+
+// ── Domain helpers ─────────────────────────────────────────────────────────
+function stockStatus(p) {
+  if (!p) return 'ok';
+  const qty = p.currentQuantity ?? p.qty ?? 0;
+  const thr = p.thresholdValue ?? p.threshold ?? 0;
+  if (qty === 0) return 'critical';
+  if (qty < thr) return 'low';
+  return 'ok';
+}
+function fmt(n) { return '₹' + Number(n || 0).toLocaleString('en-IN'); }
+
+// ── Icon ───────────────────────────────────────────────────────────────────
+function Icon({ name, size = 16, color, style }) {
+  const ref = useRef();
+  useEffect(() => {
+    if (!ref.current || !window.lucide) return;
+    ref.current.innerHTML = '';
+    const key = name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    const el = lucide.createElement(lucide[key]);
+    if (!el) return;
+    el.setAttribute('width', size); el.setAttribute('height', size);
+    if (color) el.setAttribute('stroke', color);
+    ref.current.appendChild(el);
+  }, [name, size, color]);
+  return <span ref={ref} style={{ display: 'inline-flex', alignItems: 'center', ...style }} />;
+}
+
+// ── UI Primitives ──────────────────────────────────────────────────────────
+function Badge({ status }) {
+  const map = { ok: { bg: '#F0FDF4', color: '#15803D', label: 'In Stock' }, low: { bg: '#FFFBEB', color: '#B45309', label: 'Low Stock' }, critical: { bg: '#FFF1F2', color: '#DC2626', label: 'Critical' } };
+  const s = map[status] || map.ok;
+  return <span style={{ background: s.bg, color: s.color, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4 }}>{s.label}</span>;
+}
+function OrderBadge({ status }) {
+  const map = { Pending: { bg: '#FFFBEB', color: '#B45309' }, PENDING: { bg: '#FFFBEB', color: '#B45309' }, Dispatched: { bg: '#EFF6FF', color: '#1D4ED8' }, Received: { bg: '#F0FDF4', color: '#15803D' }, RECEIVED: { bg: '#F0FDF4', color: '#15803D' } };
+  const s = map[status] || { bg: '#F3F4F6', color: '#6B7280' };
+  return <span style={{ background: s.bg, color: s.color, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4 }}>{status}</span>;
+}
+
+function Btn({ variant = 'primary', children, onClick, icon, disabled, style = {} }) {
+  const styles = {
+    primary: { background: 'var(--amber)', color: '#0F1C2E', border: '1px solid transparent' },
+    secondary: { background: '#fff', color: 'var(--slate-700)', border: '1px solid var(--slate-200)' },
+    ghost: { background: 'transparent', color: 'var(--slate-500)', border: '1px solid transparent' },
+  };
+  return (
+    <button onClick={onClick} disabled={disabled} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, fontSize: 13, fontWeight: 500, fontFamily: 'DM Sans', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, transition: 'all 150ms', ...styles[variant], ...style }}>
+      {icon && <Icon name={icon} size={14} />}
+      {children}
+    </button>
+  );
+}
+
+function TopBar({ title, subtitle, actions }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 28px', borderBottom: '1px solid var(--slate-200)', background: '#fff', flexShrink: 0 }}>
+      <div>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--slate-900)', letterSpacing: '-0.01em' }}>{title}</h1>
+        {subtitle && <p style={{ fontSize: 13, color: 'var(--slate-400)', marginTop: 2 }}>{subtitle}</p>}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>{actions}</div>
+    </div>
+  );
+}
+
+function SkeletonRows({ cols = 5, rows = 5 }) {
+  return Array.from({ length: rows }).map((_, i) => (
+    <tr key={i}>
+      {Array.from({ length: cols }).map((_, j) => (
+        <td key={j} style={{ padding: '12px 14px', borderBottom: '1px solid var(--slate-50)' }}>
+          <div className="skeleton" style={{ height: 10, width: `${50 + Math.random() * 40}%` }} />
+        </td>
+      ))}
+    </tr>
+  ));
+}
+
+function ErrorBox({ message, onRetry }) {
+  return (
+    <div style={{ margin: 24, padding: '16px 20px', background: '#FFF1F2', border: '1px solid #FFE4E6', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <Icon name="AlertTriangle" size={16} color="#DC2626" />
+      <div style={{ flex: 1, fontSize: 13, color: '#DC2626' }}>
+        <strong>Could not connect to backend.</strong> {message}
+      </div>
+      {onRetry && <Btn variant="secondary" onClick={onRetry} icon="RefreshCw">Retry</Btn>}
+    </div>
+  );
+}
+
+function Toast({ msg, type = 'success', onDone }) {
+  useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, []);
+  const colors = { success: { bg: '#F0FDF4', color: '#15803D', icon: 'CheckCircle' }, error: { bg: '#FFF1F2', color: '#DC2626', icon: 'XCircle' } };
+  const c = colors[type];
+  return (
+    <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 200, background: c.bg, color: c.color, border: `1px solid ${type==='success'?'#DCFCE7':'#FFE4E6'}`, borderRadius: 8, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 500, boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
+      <Icon name={c.icon} size={15} color={c.color} />
+      {msg}
+    </div>
+  );
+}
+
+// ── Table helpers ──────────────────────────────────────────────────────────
+const TH = ({ children }) => (
+  <th style={{ padding: '9px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--slate-400)', textAlign: 'left', borderBottom: '1px solid var(--slate-200)', whiteSpace: 'nowrap', background: 'var(--slate-50)' }}>{children}</th>
+);
+const TD = ({ children, mono, style = {} }) => (
+  <td style={{ padding: '10px 14px', fontSize: mono ? 12 : 13, fontFamily: mono ? 'DM Mono' : 'DM Sans', letterSpacing: mono ? '0.04em' : 0, color: 'var(--slate-700)', borderBottom: '1px solid var(--slate-50)', ...style }}>{children}</td>
+);
+
+// ── Sidebar ────────────────────────────────────────────────────────────────
+const NAV = [
+  { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
+  { id: 'inventory', label: 'Inventory',  icon: 'Package' },
+  { id: 'orders',   label: 'Orders',     icon: 'ClipboardList' },
+  { id: 'sales',    label: 'Sales',      icon: 'ShoppingCart' },
+  { id: 'vendors',  label: 'Vendors',    icon: 'Building2' },
+  { id: 'reports',  label: 'Reports',    icon: 'BarChart2' },
+];
+
+function Sidebar({ active, setActive }) {
+  return (
+    <div style={{ width: 220, minWidth: 220, background: 'var(--navy-900)', display: 'flex', flexDirection: 'column', height: '100vh', position: 'sticky', top: 0 }}>
+      <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 32, height: 32, background: 'var(--amber)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="Settings2" size={16} color="#0F1C2E" />
+          </div>
+          <div>
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em' }}>ASPAS</div>
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 1 }}>Parts System</div>
+          </div>
+        </div>
+      </div>
+      <nav style={{ flex: 1, padding: '12px 10px' }}>
+        {NAV.map(n => {
+          const isActive = active === n.id;
+          return (
+            <button key={n.id} onClick={() => setActive(n.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', borderRadius: 6, border: 'none', background: isActive ? 'rgba(245,158,11,0.15)' : 'transparent', color: isActive ? 'var(--amber)' : 'rgba(255,255,255,0.6)', fontFamily: 'DM Sans', fontSize: 13, fontWeight: isActive ? 600 : 400, cursor: 'pointer', textAlign: 'left', marginBottom: 2, borderLeft: isActive ? '3px solid var(--amber)' : '3px solid transparent', transition: 'all 150ms ease' }}>
+              <Icon name={n.icon} size={15} color={isActive ? '#F59E0B' : 'rgba(255,255,255,0.5)'} />
+              {n.label}
+            </button>
+          );
+        })}
+      </nav>
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.35)', fontFamily: 'DM Mono' }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22C55E' }} />
+          localhost:8080
+        </div>
+      </div>
+      <div style={{ padding: '12px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 28, height: 28, background: 'var(--navy-700)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="User" size={13} color="rgba(255,255,255,0.6)" />
+          </div>
+          <div>
+            <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 500 }}>Store Manager</div>
+            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>admin@aspas.in</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────────────
+function DashboardScreen({ setActive }) {
+  const parts    = useApi('/parts');
+  const vendors  = useApi('/vendors');
+  const orders   = useApi('/orders');
+  const sales    = useApi('/sales/transactions');
+
+  const allParts  = parts.data || [];
+  const lowStock  = allParts.filter(p => stockStatus(p) !== 'ok');
+  const todayRev  = (sales.data || []).slice(0, 5).reduce((a, s) => a + (s.revenueAmount || 0), 0);
+
+  const stats = [
+    { label: 'Total Parts',       value: parts.loading   ? '…' : allParts.length,            sub: 'spare parts in inventory',     icon: 'Package',       color: 'var(--navy-700)' },
+    { label: "Today's Revenue",   value: sales.loading   ? '…' : fmt(todayRev),              sub: 'from recent transactions',     icon: 'IndianRupee',   color: '#059669' },
+    { label: 'Low Stock Alerts',  value: parts.loading   ? '…' : lowStock.length,            sub: 'below JIT threshold',          icon: 'AlertTriangle', color: '#B45309', warn: true },
+    { label: 'Vendors',           value: vendors.loading ? '…' : (vendors.data || []).length, sub: 'registered suppliers',        icon: 'Building2',     color: 'var(--navy-500)' },
+  ];
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <TopBar title="Dashboard" subtitle={`Live data from localhost:8080`} />
+      <div style={{ padding: 24 }}>
+        {/* Stats */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 24 }}>
+          {stats.map(s => (
+            <div key={s.label} style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: '16px 20px', boxShadow: 'var(--shadow-card)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--slate-400)' }}>{s.label}</div>
+                <div style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name={s.icon} size={14} color={s.color} />
+                </div>
+              </div>
+              <div style={{ fontFamily: 'DM Mono', fontSize: 26, fontWeight: 700, color: s.warn ? '#B45309' : 'var(--slate-900)', lineHeight: 1.2 }}>{s.value}</div>
+              <div style={{ fontSize: 12, color: 'var(--slate-400)', marginTop: 4 }}>{s.sub}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
+          {/* Low stock panel */}
+          <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: '1px solid var(--slate-100)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Low Stock Alerts</div>
+              <Btn variant="ghost" onClick={() => setActive('inventory')}>View all</Btn>
+            </div>
+            {parts.error ? <ErrorBox message={parts.error} onRetry={parts.refresh} /> : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr><TH>Part No.</TH><TH>Name</TH><TH>Qty</TH><TH>Threshold</TH><TH>Status</TH></tr></thead>
+                <tbody>
+                  {parts.loading ? <SkeletonRows cols={5} rows={4} /> : lowStock.length === 0 ? (
+                    <tr><td colSpan={5} style={{ padding: 32, textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>All parts are within threshold.</td></tr>
+                  ) : lowStock.slice(0, 8).map(p => (
+                    <tr key={p.partId} onMouseEnter={e => e.currentTarget.style.background = '#FFFBEB'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                      <TD mono>{p.partNumber}</TD>
+                      <TD style={{ fontWeight: 500, color: 'var(--slate-900)' }}>{p.partName}</TD>
+                      <TD mono style={{ fontWeight: 700, color: p.currentQuantity === 0 ? '#DC2626' : '#B45309' }}>{p.currentQuantity}</TD>
+                      <TD mono style={{ color: 'var(--slate-500)' }}>{p.thresholdValue}</TD>
+                      <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--slate-50)' }}><Badge status={stockStatus(p)} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Recent sales */}
+          <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: '1px solid var(--slate-100)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Recent Sales</div>
+              <Btn variant="ghost" onClick={() => setActive('sales')}>View all</Btn>
+            </div>
+            {sales.error ? <ErrorBox message={sales.error} /> : sales.loading ? (
+              <div style={{ padding: 16 }}>{Array.from({length:4}).map((_,i)=><div key={i} style={{ display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid var(--slate-50)' }}><div className="skeleton" style={{height:10,width:120}} /><div className="skeleton" style={{height:10,width:60}} /></div>)}</div>
+            ) : (sales.data || []).slice(0, 5).map((s, i) => (
+              <div key={s.transactionId || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 18px', borderBottom: '1px solid var(--slate-50)' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{s.partName || s.partNumber || '—'}</div>
+                  <div style={{ fontSize: 11, color: 'var(--slate-400)', fontFamily: 'DM Mono', marginTop: 2 }}>qty {s.quantitySold || '—'}</div>
+                </div>
+                <div style={{ fontFamily: 'DM Mono', fontSize: 13, fontWeight: 600, color: '#059669' }}>{fmt(s.revenueAmount)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Inventory ──────────────────────────────────────────────────────────────
+function InventoryScreen() {
+  const { data, loading, error, refresh } = useApi('/parts');
+  const belowThreshold = useApi('/parts/below-threshold');
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [showAdd, setShowAdd] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const source  = filter === 'low' ? (belowThreshold.data || []) : (data || []);
+  const filtered = source.filter(p =>
+    !query || p.partNumber?.toLowerCase().includes(query.toLowerCase()) || p.partName?.toLowerCase().includes(query.toLowerCase())
+  );
+
+  async function handleAddPart(formData) {
+    try {
+      await apiFetch('/parts', { method: 'POST', body: JSON.stringify(formData) });
+      setToast({ msg: 'Part added successfully.', type: 'success' });
+      setShowAdd(false);
+      refresh();
+    } catch (e) {
+      setToast({ msg: e.message, type: 'error' });
+    }
+  }
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <TopBar
+        title="Inventory"
+        subtitle={loading ? 'Loading…' : `${(data||[]).length} spare parts · ${(belowThreshold.data||[]).length} alerts`}
+        actions={[
+          <Btn key="jit" variant="secondary" icon="Activity" onClick={async () => {
+            try { await apiFetch('/jit/calculate', { method: 'POST' }); setToast({ msg: 'JIT thresholds recalculated.', type: 'success' }); refresh(); }
+            catch (e) { setToast({ msg: e.message, type: 'error' }); }
+          }}>Recalculate JIT</Btn>,
+          <Btn key="add" variant="primary" icon="Plus" onClick={() => setShowAdd(true)}>Add Part</Btn>,
+        ]}
+      />
+      <div style={{ padding: 24 }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center' }}>
+          <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
+            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', display: 'flex' }}><Icon name="Search" size={14} color="var(--slate-400)" /></span>
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search part number or name…" style={{ width: '100%', padding: '8px 12px 8px 32px', fontSize: 13, border: '1px solid var(--slate-200)', borderRadius: 6, outline: 'none', fontFamily: 'DM Sans', color: 'var(--slate-900)' }} />
+          </div>
+          {['all', 'low'].map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={{ padding: '7px 14px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans', background: filter === f ? '#FFFBEB' : '#fff', color: filter === f ? '#D97706' : 'var(--slate-600)', border: `1px solid ${filter === f ? '#FDE68A' : 'var(--slate-200)'}` }}>
+              {f === 'all' ? 'All Parts' : 'Low Stock Only'}
+            </button>
+          ))}
+          <Btn variant="ghost" icon="RefreshCw" onClick={() => { refresh(); belowThreshold.refresh(); }}>Refresh</Btn>
+        </div>
+
+        {error ? <ErrorBox message={error} onRetry={refresh} /> : (
+          <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr><TH>Part No.</TH><TH>Part Name</TH><TH>Size</TH><TH>Qty</TH><TH>Threshold</TH><TH>Price</TH><TH>Location</TH><TH>Status</TH></tr></thead>
+              <tbody>
+                {loading ? <SkeletonRows cols={8} rows={8} /> : filtered.length === 0 ? (
+                  <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>No parts match your search.</td></tr>
+                ) : filtered.map(p => (
+                  <tr key={p.partId} onMouseEnter={e => e.currentTarget.style.background = '#FFFBEB'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                    <TD mono>{p.partNumber}</TD>
+                    <TD style={{ fontWeight: 500, color: 'var(--slate-900)' }}>{p.partName}</TD>
+                    <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--slate-50)' }}>
+                      <span style={{ background: 'var(--slate-100)', color: 'var(--slate-600)', fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{p.sizeCategory || '—'}</span>
+                    </td>
+                    <TD mono style={{ fontWeight: 700, color: stockStatus(p) === 'ok' ? '#059669' : '#DC2626' }}>{p.currentQuantity}</TD>
+                    <TD mono style={{ color: 'var(--slate-500)' }}>{p.thresholdValue}</TD>
+                    <TD mono>{fmt(p.unitPrice)}</TD>
+                    <TD style={{ color: 'var(--slate-500)', fontSize: 12 }}>
+                      {p.storageRack ? `Rack #${p.storageRack.rackNumber} · ${p.storageRack.wallLocation}` : 'Unassigned'}
+                    </TD>
+                    <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--slate-50)' }}><Badge status={stockStatus(p)} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      {showAdd && <AddPartModal onClose={() => setShowAdd(false)} onSubmit={handleAddPart} />}
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+    </div>
+  );
+}
+
+function AddPartModal({ onClose, onSubmit }) {
+  const [form, setForm] = useState({ partNumber: '', partName: '', unitPrice: '', currentQuantity: 0, thresholdValue: 0, sizeCategory: 'MEDIUM', rackNumber: '' });
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  async function handleSubmit() {
+    setSaving(true);
+    await onSubmit({ ...form, unitPrice: parseFloat(form.unitPrice), currentQuantity: parseInt(form.currentQuantity), thresholdValue: parseInt(form.thresholdValue), rackNumber: form.rackNumber ? parseInt(form.rackNumber) : undefined });
+    setSaving(false);
+  }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: 28, width: 480, boxShadow: '0 20px 48px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h2 style={{ fontSize: 17, fontWeight: 700 }}>Add Spare Part</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--slate-400)' }}><Icon name="X" size={18} /></button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {[
+            { label: 'Part Number', key: 'partNumber', ph: 'SP-BRK-001', mono: true },
+            { label: 'Part Name',   key: 'partName',   ph: 'Brake Pad – Front' },
+            { label: 'Unit Price (₹)', key: 'unitPrice', ph: '450.00', type: 'number' },
+            { label: 'Current Quantity', key: 'currentQuantity', ph: '0', type: 'number' },
+            { label: 'Threshold Value', key: 'thresholdValue', ph: '10', type: 'number' },
+            { label: 'Rack Number', key: 'rackNumber', ph: '1', type: 'number' },
+          ].map(f => (
+            <div key={f.key}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4 }}>{f.label}</label>
+              <input type={f.type || 'text'} value={form[f.key]} onChange={e => set(f.key, e.target.value)} placeholder={f.ph} style={{ width: '100%', padding: '8px 10px', fontSize: 13, fontFamily: f.mono ? 'DM Mono' : 'DM Sans', border: '1px solid var(--slate-200)', borderRadius: 6, outline: 'none', color: 'var(--slate-900)' }} />
+            </div>
+          ))}
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4 }}>Size Category</label>
+            <select value={form.sizeCategory} onChange={e => set('sizeCategory', e.target.value)} style={{ width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid var(--slate-200)', borderRadius: 6, outline: 'none', fontFamily: 'DM Sans' }}>
+              <option>SMALL</option><option>MEDIUM</option><option>LARGE</option>
+            </select>
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 22 }}>
+          <Btn variant="secondary" onClick={onClose}>Cancel</Btn>
+          <Btn variant="primary" onClick={handleSubmit} disabled={saving}>{saving ? 'Saving…' : 'Add Part'}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Vendors ────────────────────────────────────────────────────────────────
+function VendorsScreen() {
+  const { data, loading, error, refresh } = useApi('/vendors');
+  const vendors = data || [];
+  return (
+    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <TopBar title="Vendors" subtitle={loading ? 'Loading…' : `${vendors.length} registered vendors`} actions={[<Btn key="add" variant="primary" icon="Plus">Add Vendor</Btn>]} />
+      <div style={{ padding: 24 }}>
+        {error ? <ErrorBox message={error} onRetry={refresh} /> : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+            {loading ? Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: '18px 20px', boxShadow: 'var(--shadow-card)' }}>
+                <div className="skeleton" style={{ height: 36, width: 36, borderRadius: 8, marginBottom: 12 }} />
+                <div className="skeleton" style={{ height: 12, width: '70%', marginBottom: 8 }} />
+                <div className="skeleton" style={{ height: 9, width: '90%', marginBottom: 6 }} />
+                <div className="skeleton" style={{ height: 9, width: '60%' }} />
+              </div>
+            )) : vendors.map(v => (
+              <div key={v.vendorId} style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: '18px 20px', boxShadow: 'var(--shadow-card)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                  <div style={{ width: 36, height: 36, background: 'var(--slate-100)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="Building2" size={16} color="var(--slate-500)" />
+                  </div>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--slate-900)', marginBottom: 4 }}>{v.vendorName}</div>
+                <div style={{ fontSize: 12, color: 'var(--slate-400)', marginBottom: 10, lineHeight: 1.5 }}>{v.vendorAddress}</div>
+                <div style={{ borderTop: '1px solid var(--slate-100)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {v.contactNumber && <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--slate-600)' }}><Icon name="Phone" size={12} color="var(--slate-400)" /><span style={{ fontFamily: 'DM Mono', fontSize: 11 }}>{v.contactNumber}</span></div>}
+                  {v.email && <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--slate-600)' }}><Icon name="Mail" size={12} color="var(--slate-400)" /><span>{v.email}</span></div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Orders ─────────────────────────────────────────────────────────────────
+function OrdersScreen() {
+  const { data, loading, error, refresh } = useApi('/orders');
+  const orders = data || [];
+  return (
+    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <TopBar title="Orders" subtitle={loading ? 'Loading…' : `${orders.length} orders`} actions={[<Btn key="new" variant="primary" icon="Plus">New Order</Btn>]} />
+      <div style={{ padding: 24 }}>
+        {error ? <ErrorBox message={error} onRetry={refresh} /> : (
+          <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr><TH>Order ID</TH><TH>Date</TH><TH>Vendor</TH><TH>Items</TH><TH>Printed</TH><TH>Status</TH></tr></thead>
+              <tbody>
+                {loading ? <SkeletonRows cols={6} rows={6} /> : orders.length === 0 ? (
+                  <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>No orders found.</td></tr>
+                ) : orders.map(o => (
+                  <tr key={o.orderId} onMouseEnter={e => e.currentTarget.style.background = '#FFFBEB'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                    <TD mono style={{ fontWeight: 500 }}>#{o.orderId}</TD>
+                    <TD style={{ color: 'var(--slate-500)' }}>{o.orderDate}</TD>
+                    <TD style={{ fontWeight: 500, color: 'var(--slate-900)' }}>{o.vendor?.vendorName || o.vendorName || '—'}</TD>
+                    <TD mono>{o.totalItems ?? o.items ?? '—'}</TD>
+                    <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--slate-50)' }}>
+                      <span style={{ fontSize: 12, color: o.printed ? '#059669' : 'var(--slate-400)' }}>{o.printed ? 'Yes' : 'No'}</span>
+                    </td>
+                    <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--slate-50)' }}>
+                      <OrderBadge status={o.status || (o.printed ? 'Received' : 'Pending')} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Sales ──────────────────────────────────────────────────────────────────
+function SalesScreen() {
+  const { data, loading, error, refresh } = useApi('/sales/transactions');
+  const [showRecord, setShowRecord] = useState(false);
+  const [toast, setToast] = useState(null);
+  const sales = data || [];
+  const total = sales.reduce((a, s) => a + (s.revenueAmount || 0), 0);
+
+  async function handleRecordSale(formData) {
+    try {
+      await apiFetch('/sales', { method: 'POST', body: JSON.stringify(formData) });
+      setToast({ msg: 'Sale recorded.', type: 'success' });
+      setShowRecord(false);
+      refresh();
+    } catch (e) {
+      setToast({ msg: e.message, type: 'error' });
+    }
+  }
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <TopBar title="Sales" subtitle={loading ? 'Loading…' : `${sales.length} transactions · ${fmt(total)}`} actions={[<Btn key="rec" variant="primary" icon="Plus" onClick={() => setShowRecord(true)}>Record Sale</Btn>]} />
+      <div style={{ padding: 24 }}>
+        {error ? <ErrorBox message={error} onRetry={refresh} /> : (
+          <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr><TH>ID</TH><TH>Date</TH><TH>Part No.</TH><TH>Part Name</TH><TH>Qty</TH><TH>Total</TH></tr></thead>
+              <tbody>
+                {loading ? <SkeletonRows cols={6} rows={6} /> : sales.length === 0 ? (
+                  <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>No sales recorded yet.</td></tr>
+                ) : sales.map((s, i) => (
+                  <tr key={s.transactionId || i} onMouseEnter={e => e.currentTarget.style.background = '#FFFBEB'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                    <TD mono style={{ color: 'var(--slate-500)' }}>{s.transactionId || `#${i+1}`}</TD>
+                    <TD style={{ color: 'var(--slate-500)' }}>{s.transactionDate || '—'}</TD>
+                    <TD mono>{s.partNumber || '—'}</TD>
+                    <TD style={{ fontWeight: 500, color: 'var(--slate-900)' }}>{s.partName || '—'}</TD>
+                    <TD mono>{s.quantitySold ?? '—'}</TD>
+                    <TD mono style={{ fontWeight: 600, color: '#059669' }}>{fmt(s.revenueAmount)}</TD>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      {showRecord && <RecordSaleModal onClose={() => setShowRecord(false)} onSubmit={handleRecordSale} />}
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+    </div>
+  );
+}
+
+function RecordSaleModal({ onClose, onSubmit }) {
+  const [form, setForm] = useState({ partNumber: '', quantity: 1 });
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  async function handleSubmit() { setSaving(true); await onSubmit({ ...form, quantity: parseInt(form.quantity) }); setSaving(false); }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: 28, width: 360, boxShadow: '0 20px 48px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h2 style={{ fontSize: 17, fontWeight: 700 }}>Record Sale</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--slate-400)' }}><Icon name="X" size={18} /></button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4 }}>Part Number</label>
+            <input value={form.partNumber} onChange={e => set('partNumber', e.target.value)} placeholder="SP-BRK-001" style={{ width: '100%', padding: '8px 10px', fontSize: 13, fontFamily: 'DM Mono', border: '1px solid var(--slate-200)', borderRadius: 6, outline: 'none' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4 }}>Quantity Sold</label>
+            <input type="number" value={form.quantity} onChange={e => set('quantity', e.target.value)} style={{ width: '100%', padding: '8px 10px', fontSize: 13, fontFamily: 'DM Mono', border: '1px solid var(--slate-200)', borderRadius: 6, outline: 'none' }} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 22 }}>
+          <Btn variant="secondary" onClick={onClose}>Cancel</Btn>
+          <Btn variant="primary" onClick={handleSubmit} disabled={saving}>{saving ? 'Saving…' : 'Record Sale'}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Reports ────────────────────────────────────────────────────────────────
+function ReportsScreen() {
+  const [dailyKey, setDailyKey] = React.useState(0);
+  const [dailyState, setDailyState] = React.useState({ data: null, loading: true, error: null });
+  React.useEffect(() => {
+    setDailyState({ data: null, loading: true, error: null });
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const now = new Date();
+    const targets = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      return { year: d.getFullYear(), month: d.getMonth() + 1, label: monthNames[d.getMonth()] };
+    });
+    Promise.all(targets.map(({ year, month, label }) =>
+      apiFetch(`/reports/monthly/${year}/${month}`)
+        .then(d => ({ ...d, label }))
+        .catch(() => ({ totalRevenue: 0, label }))
+    )).then(results => setDailyState({ data: results, loading: false, error: null }))
+      .catch(e => setDailyState({ data: null, loading: false, error: e.message }));
+  }, [dailyKey]);
+  const daily = { ...dailyState, refresh: () => setDailyKey(k => k + 1) };
+  const jit     = useApi('/jit/thresholds');
+
+  const parts   = jit.data || [];
+  const within  = parts.filter(p => stockStatus(p) === 'ok').length;
+  const near    = parts.filter(p => stockStatus(p) === 'low').length;
+  const below   = parts.filter(p => stockStatus(p) === 'critical').length;
+
+  // Build chart from daily revenue data
+  const months = daily.data || [];
+  const barData = months.length > 0 ? months.slice(-6) : [
+    { label: 'Nov', value: 210000 }, { label: 'Dec', value: 285000 },
+    { label: 'Jan', value: 198000 }, { label: 'Feb', value: 243000 },
+    { label: 'Mar', value: 312000 }, { label: 'Apr', value: 84320 },
+  ];
+  const maxVal = Math.max(...barData.map(m => m.totalRevenue || m.value || 1));
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <TopBar title="Reports" subtitle="Revenue analytics & JIT summaries" actions={[<Btn key="gen" variant="secondary" icon="RefreshCw" onClick={() => { daily.refresh(); jit.refresh(); }}>Refresh</Btn>]} />
+      <div style={{ padding: 24, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+        {/* Chart */}
+        <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: 24, boxShadow: 'var(--shadow-card)' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Revenue Trend</div>
+          <div style={{ fontSize: 12, color: 'var(--slate-400)', marginBottom: 20 }}>
+            {daily.loading ? 'Loading from API…' : daily.error ? 'Using sample data (API unavailable)' : 'Live from /api/reports/monthly/{year}/{month}'}
+          </div>
+          {daily.error && <div style={{ fontSize: 12, color: '#B45309', background: '#FFFBEB', padding: '8px 12px', borderRadius: 6, marginBottom: 16 }}>{daily.error}</div>}
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 140 }}>
+            {barData.map((m, i) => {
+              const val = m.totalRevenue || m.value || 0;
+              const label = m.label || m.reportDate || m.month || '';
+              return (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <div style={{ fontFamily: 'DM Mono', fontSize: 10, color: 'var(--slate-400)' }}>{val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}</div>
+                  <div style={{ width: '100%', borderRadius: '4px 4px 0 0', background: i === barData.length - 1 ? 'var(--amber)' : 'var(--slate-200)', height: `${Math.round((val / maxVal) * 110)}px`, transition: 'height 400ms ease' }} />
+                  <div style={{ fontSize: 11, color: 'var(--slate-400)', fontWeight: 500 }}>{String(label).slice(0, 3)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* JIT */}
+        <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: 20, boxShadow: 'var(--shadow-card)' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>JIT Threshold Status</div>
+          <div style={{ fontSize: 12, color: 'var(--slate-400)', marginBottom: 16 }}>Based on 7-day sales velocity</div>
+          {jit.loading ? <SkeletonRows cols={2} rows={3} /> : jit.error ? <ErrorBox message={jit.error} onRetry={jit.refresh} /> : (
+            <>
+              {[
+                { label: 'Within threshold', count: within, color: '#059669', bg: '#F0FDF4' },
+                { label: 'Near threshold',   count: near,   color: '#B45309', bg: '#FFFBEB' },
+                { label: 'Below threshold',  count: below,  color: '#DC2626', bg: '#FFF1F2' },
+              ].map(r => (
+                <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--slate-50)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: r.color }} />
+                    <span style={{ fontSize: 13, color: 'var(--slate-700)' }}>{r.label}</span>
+                  </div>
+                  <span style={{ background: r.bg, color: r.color, fontFamily: 'DM Mono', fontSize: 12, fontWeight: 700, padding: '2px 10px', borderRadius: 4 }}>{r.count}</span>
+                </div>
+              ))}
+              <div style={{ marginTop: 16 }}>
+                <Btn variant="secondary" style={{ width: '100%', justifyContent: 'center' }} icon="Activity" onClick={async () => {
+                  try { await apiFetch('/jit/calculate', { method: 'POST' }); jit.refresh(); }
+                  catch (e) { alert(e.message); }
+                }}>Recalculate JIT</Btn>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── App ────────────────────────────────────────────────────────────────────
+function App() {
+  const [active, setActive] = useState(() => localStorage.getItem('aspas_screen') || 'dashboard');
+  useEffect(() => { localStorage.setItem('aspas_screen', active); }, [active]);
+  const screens = { dashboard: <DashboardScreen setActive={setActive} />, inventory: <InventoryScreen />, orders: <OrdersScreen />, sales: <SalesScreen />, vendors: <VendorsScreen />, reports: <ReportsScreen /> };
+  return (
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      <Sidebar active={active} setActive={setActive} />
+      {screens[active] || screens.dashboard}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

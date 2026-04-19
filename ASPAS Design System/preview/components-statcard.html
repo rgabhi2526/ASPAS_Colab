@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 20px; background: #F9FAFB; font-family: var(--font-sans); }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat-card { background: white; border: 1px solid #E5E7EB; border-radius: 8px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.07); }
+  .stat-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #9CA3AF; margin-bottom: 8px; }
+  .stat-value { font-family: 'DM Mono', monospace; font-size: 28px; font-weight: 700; color: #111827; line-height: 1.2; }
+  .stat-sub { font-size: 12px; color: #6B7280; margin-top: 4px; }
+  .stat-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px; margin-top: 6px; }
+  .up   { background: #F0FDF4; color: #15803D; }
+  .down { background: #FFF1F2; color: #DC2626; }
+  .warn { background: #FFFBEB; color: #B45309; }
+</style>
+</head>
+<body>
+<div class="grid">
+  <div class="stat-card">
+    <div class="stat-label">Total Parts</div>
+    <div class="stat-value">248</div>
+    <div class="stat-sub">across 5 racks</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Today's Revenue</div>
+    <div class="stat-value">₹84,320</div>
+    <div class="stat-badge up">+12.4%</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Low Stock Alerts</div>
+    <div class="stat-value" style="color:#B45309">7</div>
+    <div class="stat-badge warn">Action needed</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Open Orders</div>
+    <div class="stat-value">14</div>
+    <div class="stat-sub">3 pending dispatch</div>
+  </div>
+</div>
+</body>
+</html>
