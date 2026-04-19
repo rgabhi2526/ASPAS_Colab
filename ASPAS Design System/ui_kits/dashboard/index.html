@@ -301,14 +301,15 @@ function DashboardScreen({ setActive }) {
   const vendors  = useApi('/vendors');
   const orders   = useApi('/orders');
   const sales    = useApi('/sales/transactions/recent?limit=5');
+  const statsApi = useApi('/sales/stats');
 
   const allParts  = parts.data || [];
   const lowStock  = allParts.filter(p => stockStatus(p) !== 'ok');
-  const todayRev  = (sales.data || []).reduce((a, s) => a + (s.revenueAmount || 0), 0);
+  const todayRev  = statsApi.data?.totalRevenue || 0;
 
   const stats = [
     { label: 'Total Parts',       value: parts.loading   ? '…' : allParts.length,            sub: 'spare parts in inventory',     icon: 'Package',       color: 'var(--navy-700)' },
-    { label: "Today's Revenue",   value: sales.loading   ? '…' : fmt(todayRev),              sub: 'from recent transactions',     icon: 'IndianRupee',   color: '#059669' },
+    { label: "Today's Revenue",   value: statsApi.loading? '…' : fmt(todayRev),              sub: 'from today\'s transactions',   icon: 'IndianRupee',   color: '#059669' },
     { label: 'Low Stock Alerts',  value: parts.loading   ? '…' : lowStock.length,            sub: 'below JIT threshold',          icon: 'AlertTriangle', color: '#B45309', warn: true },
     { label: 'Vendors',           value: vendors.loading ? '…' : (vendors.data || []).length, sub: 'registered suppliers',        icon: 'Building2',     color: 'var(--navy-500)' },
   ];
