@@ -130,8 +130,7 @@ public class OrderController {
         description = "Returns all vendor order lists for a calendar date (same as by-date path)"
     )
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Orders found"),
-        @ApiResponse(responseCode = "404", description = "No order for that date")
+        @ApiResponse(responseCode = "200", description = "Orders for that date (may be empty)")
     })
     public ResponseEntity<List<OrderResponseDTO>> searchOrderByDate(
             @RequestParam @DateTimeFormat(iso = ISO.DATE) LocalDate date
@@ -149,8 +148,7 @@ public class OrderController {
         description = "Returns all order lists generated on a specific date"
     )
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Orders found"),
-        @ApiResponse(responseCode = "404", description = "No order for that date")
+        @ApiResponse(responseCode = "200", description = "Orders for that date (may be empty)")
     })
     public ResponseEntity<List<OrderResponseDTO>> getOrdersByDatePath(
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date

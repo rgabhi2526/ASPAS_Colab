@@ -135,27 +135,7 @@ public class OrderService {
         List<OrderResponseDTO> responses = new ArrayList<>();
 
         if (itemsByVendor.isEmpty()) {
-            OrderList emptyList = OrderList.builder()
-                .orderDate(today)
-                .vendorId(null)
-                .totalItems(0)
-                .isPrinted(false)
-                .orderItems(new ArrayList<>())
-                .build();
-            emptyList = orderListRepository.save(emptyList);
-            String formattedOutput = OrderFormatter.formatOrderList(
-                emptyList.getOrderId(),
-                emptyList.getOrderDate(),
-                emptyList.getOrderItems(),
-                emptyList.getCreatedAt()
-            );
-            emptyList.setPrintText(formattedOutput);
-            emptyList.setIsPrinted(true);
-            emptyList = orderListRepository.save(emptyList);
-            System.out.println(formattedOutput);
-            responses.add(buildOrderResponse(emptyList));
-            log.info("═══ PROCESS 3.0 COMPLETE: No reorders — placeholder Order #{} ═══",
-                emptyList.getOrderId());
+            log.info("═══ PROCESS 3.0 COMPLETE: No parts below threshold, no orders generated ═══");
             return responses;
         }
 
@@ -241,16 +221,13 @@ public class OrderService {
     }
 
     /**
-     * Get an order by date.
+     * Get all orders for a calendar date.
      *
      * @param date order date
-     * @return order response
+     * @return order responses (empty list if none exist for that date)
      */
     public List<OrderResponseDTO> getOrdersByDate(LocalDate date) {
         List<OrderList> lists = orderListRepository.findAllByOrderDateOrderByOrderIdAsc(date);
-        if (lists.isEmpty()) {
-            throw new OrderNotFoundException("No order found for date: " + date);
-        }
         return lists.stream().map(this::buildOrderResponse).collect(Collectors.toList());
     }
 

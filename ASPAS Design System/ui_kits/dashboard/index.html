@@ -895,8 +895,12 @@ function OrdersScreen() {
   async function handleGenerate() {
     setGenerating(true);
     try {
-      await apiFetch('/orders/generate', { method: 'POST' });
-      setToast({ msg: `Orders generated successfully.`, type: 'success' });
+      const generatedOrders = await apiFetch('/orders/generate', { method: 'POST' });
+      if (!generatedOrders || generatedOrders.length === 0) {
+        setToast({ msg: 'No items are below threshold. No order list generated.', type: 'error' });
+      } else {
+        setToast({ msg: 'Orders generated successfully.', type: 'success' });
+      }
       setShowGen(false);
       refresh();
     } catch(e) {
