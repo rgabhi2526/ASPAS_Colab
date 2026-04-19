@@ -35,6 +35,7 @@ public class OrderResponseDTO {
 
     private Integer totalItems;
     private Boolean isPrinted;
+    private String status;
     private String printText;  // Formatted order output
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
@@ -56,5 +57,6 @@ public class OrderResponseDTO {
         private Integer requiredQuantity;
         private String vendorName;
         private String vendorAddress;
+        private Boolean fulfilled;
     }
 }

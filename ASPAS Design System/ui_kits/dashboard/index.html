@@ -163,7 +163,7 @@ function Badge({ status }) {
   return <span style={{ background: s.bg, color: s.color, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4 }}>{s.label}</span>;
 }
 function OrderBadge({ status }) {
-  const map = { Pending: { bg: '#FFFBEB', color: '#B45309' }, PENDING: { bg: '#FFFBEB', color: '#B45309' }, Dispatched: { bg: '#EFF6FF', color: '#1D4ED8' }, Received: { bg: '#F0FDF4', color: '#15803D' }, RECEIVED: { bg: '#F0FDF4', color: '#15803D' } };
+  const map = { Pending: { bg: '#FFFBEB', color: '#B45309' }, PENDING: { bg: '#FFFBEB', color: '#B45309' }, Dispatched: { bg: '#EFF6FF', color: '#1D4ED8' }, Received: { bg: '#F0FDF4', color: '#15803D' }, RECEIVED: { bg: '#F0FDF4', color: '#15803D' }, Fulfilled: { bg: '#F0FDF4', color: '#15803D' }, FULFILLED: { bg: '#F0FDF4', color: '#15803D' } };
   const s = map[status] || { bg: '#F3F4F6', color: '#6B7280' };
   return <span style={{ background: s.bg, color: s.color, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4 }}>{status}</span>;
 }
@@ -634,7 +634,14 @@ function PartDetailDrawer({ partNumber, onClose, onRefresh, setToast }) {
               {vendorsApi.loading ? <SkeletonRows cols={1} rows={2} /> : (vendorsApi.data || []).length === 0 ? <div style={{ fontSize: 12, color: 'var(--slate-500)' }}>No vendors assigned.</div> : (vendorsApi.data || []).map(v => (
                 <div key={v.vendorId} style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 6, padding: 12, marginBottom: 8 }}>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{v.vendorName}</div>
-                  <div style={{ fontSize: 12, color: 'var(--slate-500)' }}>{v.email || v.contactNumber}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--slate-500)', marginTop: 4 }}>
+                    <Icon name="Phone" size={12} color="var(--slate-400)" />
+                    <span style={{ fontFamily: 'DM Mono' }}>{v.contactNumber || '—'}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--slate-500)', marginTop: 4 }}>
+                    <Icon name="Mail" size={12} color="var(--slate-400)" />
+                    <span>{v.email || '—'}</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -934,14 +941,16 @@ function OrdersScreen() {
         )}
       </div>
       <ConfirmDialog open={showGen} title="Generate Orders" message="Generate orders for all parts currently below their JIT threshold?" onCancel={() => setShowGen(false)} onConfirm={handleGenerate} confirmText="Generate" loading={generating} />
-      {detailOrderId && <OrderDetailDrawer orderId={detailOrderId} onClose={() => setDetailOrderId(null)} setToast={setToast} />}
+      {detailOrderId && <OrderDetailDrawer orderId={detailOrderId} onClose={() => setDetailOrderId(null)} setToast={setToast} onOrderUpdated={refresh} />}
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
 }
 
-function OrderDetailDrawer({ orderId, onClose, setToast }) {
-  const { data: order, loading, error } = useApi(`/orders/${orderId}`);
+function OrderDetailDrawer({ orderId, onClose, setToast, onOrderUpdated }) {
+  const { data: order, loading, error, refresh } = useApi(`/orders/${orderId}`);
+  const vendorApi = useApi(order?.vendorId ? `/vendors/${order.vendorId}` : null, [order?.vendorId]);
+  const [fulfilling, setFulfilling] = useState(false);
 
   async function handlePrint() {
     try {
@@ -957,7 +966,22 @@ function OrderDetailDrawer({ orderId, onClose, setToast }) {
     }
   }
 
+  async function handleFulfill() {
+    setFulfilling(true);
+    try {
+      await apiFetch(`/orders/${orderId}/fulfill`, { method: 'PUT' });
+      setToast({ msg: 'Order fulfilled and inventory updated.', type: 'success' });
+      refresh();
+      if (onOrderUpdated) onOrderUpdated();
+    } catch (e) {
+      setToast({ msg: e.message, type: 'error' });
+    }
+    setFulfilling(false);
+  }
+
   if (loading || !order) return <DetailDrawer open title="Order Details" onClose={onClose}>{loading ? <div className="skeleton" style={{height: 100}} /> : <ErrorBox message={error} />}</DetailDrawer>;
+  const orderStatus = order.status || (order.printed ? 'FULFILLED' : 'PENDING');
+  const canFulfill = orderStatus === 'PENDING';
 
   return (
     <DetailDrawer open title={`Order #${order.orderId}`} onClose={onClose}>
@@ -967,24 +991,34 @@ function OrderDetailDrawer({ orderId, onClose, setToast }) {
             <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{order.items?.[0]?.vendorName || 'Vendor'}</div>
             <div style={{ fontSize: 13, color: 'var(--slate-500)' }}>{order.orderDate}</div>
           </div>
-          <OrderBadge status={order.status || (order.printed ? 'Received' : 'Pending')} />
+          <OrderBadge status={orderStatus} />
         </div>
         <div style={{ background: '#F9FAFB', borderRadius: 8, padding: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div><div style={{ fontSize: 11, color: 'var(--slate-400)' }}>Total Items</div><div style={{ fontWeight: 600, fontSize: 13 }}>{order.totalItems || order.items?.length || 0}</div></div>
           <div><div style={{ fontSize: 11, color: 'var(--slate-400)' }}>Printed</div><div style={{ fontWeight: 600, fontSize: 13 }}>{order.printed ? 'Yes' : 'No'}</div></div>
+          <div><div style={{ fontSize: 11, color: 'var(--slate-400)' }}>Vendor Phone</div><div style={{ fontWeight: 600, fontSize: 13, fontFamily: 'DM Mono' }}>{vendorApi.data?.contactNumber || '—'}</div></div>
+          <div><div style={{ fontSize: 11, color: 'var(--slate-400)' }}>Vendor Email</div><div style={{ fontWeight: 600, fontSize: 13 }}>{vendorApi.data?.email || '—'}</div></div>
         </div>
-        <Btn variant="primary" icon="Printer" onClick={handlePrint}>Print Order</Btn>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Btn variant="primary" icon="Printer" onClick={handlePrint}>Print Order</Btn>
+          <Btn variant={canFulfill ? "secondary" : "ghost"} icon="CheckCircle" onClick={handleFulfill} disabled={!canFulfill || fulfilling}>
+            {fulfilling ? 'Updating…' : (canFulfill ? 'Mark as Fulfilled' : 'Already Fulfilled')}
+          </Btn>
+        </div>
         
         <div>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Items</div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><TH>Part No.</TH><TH>Name</TH><TH>Qty</TH></tr></thead>
+            <thead><tr><TH>Part No.</TH><TH>Name</TH><TH>Qty</TH><TH>Status</TH></tr></thead>
             <tbody>
-              {(!order.items || order.items.length === 0) ? <tr><td colSpan={3} style={{ padding: 16, textAlign: 'center', fontSize: 12, color: 'var(--slate-400)' }}>No items.</td></tr> : order.items.map((it, i) => (
+              {(!order.items || order.items.length === 0) ? <tr><td colSpan={4} style={{ padding: 16, textAlign: 'center', fontSize: 12, color: 'var(--slate-400)' }}>No items.</td></tr> : order.items.map((it, i) => (
                 <tr key={it.id || i}>
                   <TD mono>{it.partNumber || it.part?.partNumber}</TD>
                   <TD>{it.partName || it.part?.partName}</TD>
                   <TD mono>{it.requiredQuantity || it.quantity}</TD>
+                  <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--slate-50)' }}>
+                    <OrderBadge status={it.fulfilled ? 'FULFILLED' : 'PENDING'} />
+                  </td>
                 </tr>
               ))}
             </tbody>

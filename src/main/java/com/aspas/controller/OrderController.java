@@ -186,6 +186,21 @@ public class OrderController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/{orderId}/fulfill")
+    @Operation(
+        summary = "Fulfill order",
+        description = "Marks all pending order items as fulfilled and updates inventory quantities."
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Order fulfilled successfully"),
+        @ApiResponse(responseCode = "400", description = "Order already fulfilled or invalid data"),
+        @ApiResponse(responseCode = "404", description = "Order not found")
+    })
+    public ResponseEntity<OrderResponseDTO> fulfillOrder(@PathVariable Long orderId) {
+        log.info("API: PUT /api/orders/{}/fulfill", orderId);
+        return ResponseEntity.ok(orderService.fulfillOrder(orderId));
+    }
+
     /**
      * Get print-ready text output for an order.
      *

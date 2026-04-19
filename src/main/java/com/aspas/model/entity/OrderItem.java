@@ -67,6 +67,9 @@ public class OrderItem {
     @Column(name = "vendor_id")
     private Long vendorId;
 
+    @Column(nullable = false)
+    private Boolean fulfilled = false;
+
     /**
      * Get item details as formatted string.
      * 

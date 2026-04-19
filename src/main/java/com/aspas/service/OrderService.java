@@ -212,6 +212,35 @@ public class OrderService {
     }
 
     /**
+     * Mark all pending items in an order as fulfilled and increase inventory.
+     */
+    @Transactional
+    public OrderResponseDTO fulfillOrder(Long orderId) {
+        OrderList order = orderListRepository.findById(orderId)
+            .orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        boolean hasPendingItems = false;
+        for (OrderItem item : order.getOrderItems()) {
+            if (Boolean.TRUE.equals(item.getFulfilled())) {
+                continue;
+            }
+            hasPendingItems = true;
+            SparePart part = sparePartRepository.findByPartNumber(item.getPartNumber())
+                .orElseThrow(() -> new IllegalArgumentException("Part not found for order item: " + item.getPartNumber()));
+            part.updateQuantity(item.getRequiredQuantity());
+            sparePartRepository.save(part);
+            item.setFulfilled(true);
+        }
+
+        if (!hasPendingItems) {
+            throw new IllegalArgumentException("Order is already fulfilled.");
+        }
+
+        OrderList saved = orderListRepository.save(order);
+        return buildOrderResponse(saved);
+    }
+
+    /**
      * Get an order by date.
      *
      * @param date order date
@@ -268,6 +297,10 @@ public class OrderService {
      * Build OrderResponseDTO from OrderList entity.
      */
     private OrderResponseDTO buildOrderResponse(OrderList order) {
+        boolean hasPendingItems = order.getOrderItems()
+            .stream()
+            .anyMatch(item -> !Boolean.TRUE.equals(item.getFulfilled()));
+        String status = hasPendingItems ? "PENDING" : "FULFILLED";
 
         List<OrderResponseDTO.OrderItemDTO> itemDTOs = order.getOrderItems()
             .stream()
@@ -278,6 +311,7 @@ public class OrderService {
                 .requiredQuantity(item.getRequiredQuantity())
                 .vendorName(item.getVendorName())
                 .vendorAddress(item.getVendorAddress())
+                .fulfilled(Boolean.TRUE.equals(item.getFulfilled()))
                 .build()
             )
             .collect(Collectors.toList());
@@ -288,6 +322,7 @@ public class OrderService {
             .orderDate(order.getOrderDate())
             .totalItems(order.getTotalItemsCount())
             .isPrinted(order.getIsPrinted())
+            .status(status)
             .printText(order.getPrintText())
             .createdAt(order.getCreatedAt())
             .items(itemDTOs)

@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     part_number     VARCHAR(50) NOT NULL,
     part_name       VARCHAR(100),
     required_qty    INT NOT NULL,
+    fulfilled       BOOLEAN NOT NULL DEFAULT FALSE,
     vendor_name     VARCHAR(100),
     vendor_address  VARCHAR(255) NOT NULL,
 
