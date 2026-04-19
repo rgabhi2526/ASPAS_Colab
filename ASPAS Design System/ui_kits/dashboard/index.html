@@ -653,12 +653,26 @@ function PartDetailDrawer({ partNumber, onClose, onRefresh, setToast }) {
 }
 
 function AddPartModal({ onClose, onSubmit }) {
-  const [form, setForm] = useState({ partNumber: '', partName: '', unitPrice: '', currentQuantity: 0, thresholdValue: 0, sizeCategory: 'MEDIUM', rackNumber: '' });
+  const [form, setForm] = useState({ partNumber: '', partName: '', unitPrice: '', currentQuantity: 0, thresholdValue: 0, sizeCategory: 'MEDIUM', rackNumber: '', vendorIds: [] });
   const [saving, setSaving] = useState(false);
+  const vendorsApi = useApi('/vendors');
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  function handleVendorSelection(e) {
+    const selectedIds = Array.from(e.target.selectedOptions).map(opt => parseInt(opt.value, 10));
+    set('vendorIds', selectedIds);
+  }
+
   async function handleSubmit() {
     setSaving(true);
-    await onSubmit({ ...form, unitPrice: parseFloat(form.unitPrice), currentQuantity: parseInt(form.currentQuantity), thresholdValue: parseInt(form.thresholdValue), rackNumber: form.rackNumber ? parseInt(form.rackNumber) : undefined });
+    await onSubmit({
+      ...form,
+      unitPrice: parseFloat(form.unitPrice),
+      currentQuantity: parseInt(form.currentQuantity),
+      thresholdValue: parseInt(form.thresholdValue),
+      rackNumber: form.rackNumber ? parseInt(form.rackNumber) : undefined,
+      vendorIds: (form.vendorIds || []).filter(Number.isFinite),
+    });
     setSaving(false);
   }
   return (
@@ -684,9 +698,18 @@ function AddPartModal({ onClose, onSubmit }) {
           ))}
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4 }}>Size Category</label>
-            <select value={form.sizeCategory} onChange={e => set('sizeCategory', e.target.value)} style={{ width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid var(--slate-200)', borderRadius: 6, outline: 'none', fontFamily: 'DM Sans' }}>
+            <select value={form.sizeCategory} onChange={e => set('sizeCategory', e.target.value)} style={{ width: '100%', height: 36, padding: '8px 10px', fontSize: 13, border: '1px solid var(--slate-200)', borderRadius: 6, outline: 'none', fontFamily: 'DM Sans', color: 'var(--slate-900)', background: '#fff' }}>
               <option>SMALL</option><option>MEDIUM</option><option>LARGE</option>
             </select>
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4 }}>Vendors</label>
+            <select multiple value={(form.vendorIds || []).map(String)} onChange={handleVendorSelection} style={{ width: '100%', minHeight: 92, padding: '8px 10px', fontSize: 13, border: '1px solid var(--slate-200)', borderRadius: 6, outline: 'none', fontFamily: 'DM Sans', color: 'var(--slate-900)', background: '#fff' }}>
+              {(vendorsApi.data || []).map(v => <option key={v.vendorId} value={String(v.vendorId)}>{v.vendorName}</option>)}
+            </select>
+            <div style={{ marginTop: 6, fontSize: 11, color: 'var(--slate-400)' }}>
+              {vendorsApi.loading ? 'Loading vendors…' : vendorsApi.error ? 'Could not load vendors.' : 'Hold Ctrl (Windows) or Cmd (Mac) to select multiple vendors.'}
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 22 }}>
