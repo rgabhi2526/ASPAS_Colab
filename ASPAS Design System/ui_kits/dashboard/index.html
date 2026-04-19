@@ -45,6 +45,15 @@ const { useState, useEffect, useRef, useCallback } = React;
 const API = 'http://localhost:8080/api';
 
 // ── API helpers ────────────────────────────────────────────────────────────
+function useDebounce(value, delay) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
 async function apiFetch(path, opts = {}) {
   const res = await fetch(API + path, {
     headers: { 'Content-Type': 'application/json', ...opts.headers },
@@ -60,9 +69,15 @@ async function apiFetch(path, opts = {}) {
 
 function useApi(path, deps = []) {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!!path);
   const [error, setError] = useState(null);
   const refresh = useCallback(() => {
+    if (!path) {
+      setLoading(false);
+      setData(null);
+      setError(null);
+      return;
+    }
     setLoading(true); setError(null);
     apiFetch(path)
       .then(d => { setData(d); setLoading(false); })
@@ -100,6 +115,48 @@ function Icon({ name, size = 16, color, style }) {
 }
 
 // ── UI Primitives ──────────────────────────────────────────────────────────
+function DetailDrawer({ open, onClose, title, children }) {
+  if (!open) return null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', justifyContent: 'flex-end' }} onClick={onClose}>
+      <div style={{ background: '#fff', width: 420, height: '100vh', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 24px rgba(0,0,0,0.1)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--slate-200)', flexShrink: 0 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{title}</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--slate-400)' }}><Icon name="X" size={20} /></button>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmDialog({ open, title, message, onConfirm, onCancel, confirmText = 'Delete', confirmVariant = 'primary', loading = false }) {
+  if (!open) return null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onCancel}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 360, boxShadow: '0 20px 48px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>{title}</h2>
+        <p style={{ fontSize: 13, color: 'var(--slate-600)', marginBottom: 24, lineHeight: 1.5 }}>{message}</p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Btn variant="secondary" onClick={onCancel}>Cancel</Btn>
+          <Btn variant={confirmVariant} onClick={onConfirm} disabled={loading}>{loading ? 'Please wait…' : confirmText}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SearchInput({ value, onChange, placeholder = 'Search…' }) {
+  return (
+    <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
+      <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', display: 'flex' }}><Icon name="Search" size={14} color="var(--slate-400)" /></span>
+      <input value={value} onChange={onChange} placeholder={placeholder} style={{ width: '100%', padding: '8px 12px 8px 32px', fontSize: 13, border: '1px solid var(--slate-200)', borderRadius: 6, outline: 'none', fontFamily: 'DM Sans', color: 'var(--slate-900)' }} />
+    </div>
+  );
+}
+
 function Badge({ status }) {
   const map = { ok: { bg: '#F0FDF4', color: '#15803D', label: 'In Stock' }, low: { bg: '#FFFBEB', color: '#B45309', label: 'Low Stock' }, critical: { bg: '#FFF1F2', color: '#DC2626', label: 'Critical' } };
   const s = map[status] || map.ok;
@@ -116,6 +173,7 @@ function Btn({ variant = 'primary', children, onClick, icon, disabled, style = {
     primary: { background: 'var(--amber)', color: '#0F1C2E', border: '1px solid transparent' },
     secondary: { background: '#fff', color: 'var(--slate-700)', border: '1px solid var(--slate-200)' },
     ghost: { background: 'transparent', color: 'var(--slate-500)', border: '1px solid transparent' },
+    danger: { background: '#DC2626', color: '#fff', border: '1px solid transparent' },
   };
   return (
     <button onClick={onClick} disabled={disabled} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, fontSize: 13, fontWeight: 500, fontFamily: 'DM Sans', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, transition: 'all 150ms', ...styles[variant], ...style }}>
@@ -242,11 +300,11 @@ function DashboardScreen({ setActive }) {
   const parts    = useApi('/parts');
   const vendors  = useApi('/vendors');
   const orders   = useApi('/orders');
-  const sales    = useApi('/sales/transactions');
+  const sales    = useApi('/sales/transactions/recent?limit=5');
 
   const allParts  = parts.data || [];
   const lowStock  = allParts.filter(p => stockStatus(p) !== 'ok');
-  const todayRev  = (sales.data || []).slice(0, 5).reduce((a, s) => a + (s.revenueAmount || 0), 0);
+  const todayRev  = (sales.data || []).reduce((a, s) => a + (s.revenueAmount || 0), 0);
 
   const stats = [
     { label: 'Total Parts',       value: parts.loading   ? '…' : allParts.length,            sub: 'spare parts in inventory',     icon: 'Package',       color: 'var(--navy-700)' },
@@ -328,17 +386,31 @@ function DashboardScreen({ setActive }) {
 
 // ── Inventory ──────────────────────────────────────────────────────────────
 function InventoryScreen() {
-  const { data, loading, error, refresh } = useApi('/parts');
-  const belowThreshold = useApi('/parts/below-threshold');
   const [query, setQuery] = useState('');
+  const debouncedQuery = useDebounce(query, 300);
   const [filter, setFilter] = useState('all');
+  const [selectedRack, setSelectedRack] = useState('');
+  
   const [showAdd, setShowAdd] = useState(false);
+  const [showRacks, setShowRacks] = useState(false);
   const [toast, setToast] = useState(null);
+  
+  const [detailPartId, setDetailPartId] = useState(null);
+  const [deleteConf, setDeleteConf] = useState(null);
 
-  const source  = filter === 'low' ? (belowThreshold.data || []) : (data || []);
-  const filtered = source.filter(p =>
-    !query || p.partNumber?.toLowerCase().includes(query.toLowerCase()) || p.partName?.toLowerCase().includes(query.toLowerCase())
-  );
+  let apiPath = '/parts';
+  if (filter === 'low') apiPath = '/parts/below-threshold';
+  else if (selectedRack) apiPath = `/parts/by-rack/${selectedRack}`;
+  else if (debouncedQuery.length >= 2) apiPath = `/parts/search?q=${encodeURIComponent(debouncedQuery)}`;
+
+  const mainApi = useApi(apiPath);
+  const parts = mainApi.data || [];
+  const loading = mainApi.loading;
+  const error = mainApi.error;
+  const refresh = mainApi.refresh;
+
+  const belowThresholdApi = useApi('/parts/below-threshold');
+  const racksApi = useApi('/racks');
 
   async function handleAddPart(formData) {
     try {
@@ -351,12 +423,24 @@ function InventoryScreen() {
     }
   }
 
+  async function handleDeletePart() {
+    try {
+      await apiFetch(`/parts/${deleteConf}`, { method: 'DELETE' });
+      setToast({ msg: 'Part deleted.', type: 'success' });
+      setDeleteConf(null);
+      refresh();
+    } catch (e) {
+      setToast({ msg: e.message, type: 'error' });
+    }
+  }
+
   return (
     <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
       <TopBar
         title="Inventory"
-        subtitle={loading ? 'Loading…' : `${(data||[]).length} spare parts · ${(belowThreshold.data||[]).length} alerts`}
+        subtitle={loading ? 'Loading…' : `${(parts).length} spare parts shown · ${(belowThresholdApi.data||[]).length} alerts`}
         actions={[
+          <Btn key="racks" variant="secondary" icon="Layers" onClick={() => setShowRacks(true)}>Manage Racks</Btn>,
           <Btn key="jit" variant="secondary" icon="Activity" onClick={async () => {
             try { await apiFetch('/jit/calculate', { method: 'POST' }); setToast({ msg: 'JIT thresholds recalculated.', type: 'success' }); refresh(); }
             catch (e) { setToast({ msg: e.message, type: 'error' }); }
@@ -366,27 +450,28 @@ function InventoryScreen() {
       />
       <div style={{ padding: 24 }}>
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center' }}>
-          <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
-            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', display: 'flex' }}><Icon name="Search" size={14} color="var(--slate-400)" /></span>
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search part number or name…" style={{ width: '100%', padding: '8px 12px 8px 32px', fontSize: 13, border: '1px solid var(--slate-200)', borderRadius: 6, outline: 'none', fontFamily: 'DM Sans', color: 'var(--slate-900)' }} />
-          </div>
+          <SearchInput value={query} onChange={e => { setQuery(e.target.value); setFilter('all'); setSelectedRack(''); }} placeholder="Search part number or name…" />
           {['all', 'low'].map(f => (
-            <button key={f} onClick={() => setFilter(f)} style={{ padding: '7px 14px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans', background: filter === f ? '#FFFBEB' : '#fff', color: filter === f ? '#D97706' : 'var(--slate-600)', border: `1px solid ${filter === f ? '#FDE68A' : 'var(--slate-200)'}` }}>
+            <button key={f} onClick={() => { setFilter(f); setSelectedRack(''); setQuery(''); }} style={{ padding: '7px 14px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans', background: filter === f && !selectedRack ? '#FFFBEB' : '#fff', color: filter === f && !selectedRack ? '#D97706' : 'var(--slate-600)', border: `1px solid ${filter === f && !selectedRack ? '#FDE68A' : 'var(--slate-200)'}` }}>
               {f === 'all' ? 'All Parts' : 'Low Stock Only'}
             </button>
           ))}
-          <Btn variant="ghost" icon="RefreshCw" onClick={() => { refresh(); belowThreshold.refresh(); }}>Refresh</Btn>
+          <select value={selectedRack} onChange={e => { setSelectedRack(e.target.value); setFilter(''); setQuery(''); }} style={{ padding: '7px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--slate-200)', outline: 'none', background: selectedRack ? '#EFF6FF' : '#fff', color: selectedRack ? '#1D4ED8' : 'var(--slate-600)' }}>
+            <option value="">Filter by Rack…</option>
+            {(racksApi.data || []).map(r => <option key={r.rackNumber} value={r.rackNumber}>Rack #{r.rackNumber}</option>)}
+          </select>
+          <Btn variant="ghost" icon="RefreshCw" onClick={() => { refresh(); belowThresholdApi.refresh(); racksApi.refresh(); }}>Refresh</Btn>
         </div>
 
         {error ? <ErrorBox message={error} onRetry={refresh} /> : (
           <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr><TH>Part No.</TH><TH>Part Name</TH><TH>Size</TH><TH>Qty</TH><TH>Threshold</TH><TH>Price</TH><TH>Location</TH><TH>Status</TH></tr></thead>
+              <thead><tr><TH>Part No.</TH><TH>Part Name</TH><TH>Size</TH><TH>Qty</TH><TH>Threshold</TH><TH>Price</TH><TH>Location</TH><TH>Status</TH><TH></TH></tr></thead>
               <tbody>
-                {loading ? <SkeletonRows cols={8} rows={8} /> : filtered.length === 0 ? (
-                  <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>No parts match your search.</td></tr>
-                ) : filtered.map(p => (
-                  <tr key={p.partId} onMouseEnter={e => e.currentTarget.style.background = '#FFFBEB'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                {loading ? <SkeletonRows cols={9} rows={8} /> : parts.length === 0 ? (
+                  <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>No parts found.</td></tr>
+                ) : parts.map(p => (
+                  <tr key={p.partId} onClick={() => setDetailPartId(p.partNumber)} style={{ cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBEB'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                     <TD mono>{p.partNumber}</TD>
                     <TD style={{ fontWeight: 500, color: 'var(--slate-900)' }}>{p.partName}</TD>
                     <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--slate-50)' }}>
@@ -399,6 +484,11 @@ function InventoryScreen() {
                       {p.storageRack ? `Rack #${p.storageRack.rackNumber} · ${p.storageRack.wallLocation}` : 'Unassigned'}
                     </TD>
                     <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--slate-50)' }}><Badge status={stockStatus(p)} /></td>
+                    <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--slate-50)', textAlign: 'right' }}>
+                      <button onClick={e => { e.stopPropagation(); setDeleteConf(p.partNumber); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', padding: 4 }}>
+                        <Icon name="Trash2" size={14} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -407,8 +497,150 @@ function InventoryScreen() {
         )}
       </div>
       {showAdd && <AddPartModal onClose={() => setShowAdd(false)} onSubmit={handleAddPart} />}
+      {showRacks && <RackManagementModal onClose={() => setShowRacks(false)} setToast={setToast} />}
+      {detailPartId && <PartDetailDrawer partNumber={detailPartId} onClose={() => setDetailPartId(null)} onRefresh={refresh} setToast={setToast} />}
+      <ConfirmDialog open={!!deleteConf} title="Delete Part" message={`Are you sure you want to delete part ${deleteConf}? This action cannot be undone.`} onCancel={() => setDeleteConf(null)} onConfirm={handleDeletePart} />
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
+  );
+}
+
+function RackManagementModal({ onClose, setToast }) {
+  const { data: racks, loading, error, refresh } = useApi('/racks');
+  const [form, setForm] = useState({ rackNumber: '', wallLocation: '', maxCapacity: '' });
+  const [saving, setSaving] = useState(false);
+
+  async function handleAdd() {
+    setSaving(true);
+    try {
+      await apiFetch('/racks', { method: 'POST', body: JSON.stringify({...form, rackNumber: parseInt(form.rackNumber), maxCapacity: parseInt(form.maxCapacity)}) });
+      setForm({ rackNumber: '', wallLocation: '', maxCapacity: '' });
+      refresh();
+      setToast({ msg: 'Rack added', type: 'success' });
+    } catch(e) {
+      setToast({ msg: e.message, type: 'error' });
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 480, boxShadow: '0 20px 48px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h2 style={{ fontSize: 17, fontWeight: 700 }}>Manage Racks</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--slate-400)' }}><Icon name="X" size={18} /></button>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', marginBottom: 16 }}>
+          {error ? <ErrorBox message={error} /> : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr><TH>Rack No.</TH><TH>Location</TH><TH>Capacity</TH></tr></thead>
+              <tbody>
+                {loading ? <SkeletonRows cols={3} rows={3} /> : (racks||[]).map(r => (
+                  <tr key={r.rackNumber}>
+                    <TD mono>{r.rackNumber}</TD><TD>{r.wallLocation}</TD><TD mono>{r.maxCapacity}</TD>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div style={{ background: '#F9FAFB', padding: 16, borderRadius: 8, display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <div style={{flex:1}}><input value={form.rackNumber} onChange={e=>setForm({...form, rackNumber: e.target.value})} placeholder="No." type="number" style={{ width: '100%', padding: '6px 8px', fontSize: 12, border: '1px solid var(--slate-200)', borderRadius: 4 }} /></div>
+          <div style={{flex:2}}><input value={form.wallLocation} onChange={e=>setForm({...form, wallLocation: e.target.value})} placeholder="Location" style={{ width: '100%', padding: '6px 8px', fontSize: 12, border: '1px solid var(--slate-200)', borderRadius: 4 }} /></div>
+          <div style={{flex:1}}><input value={form.maxCapacity} onChange={e=>setForm({...form, maxCapacity: e.target.value})} placeholder="Cap." type="number" style={{ width: '100%', padding: '6px 8px', fontSize: 12, border: '1px solid var(--slate-200)', borderRadius: 4 }} /></div>
+          <Btn variant="primary" onClick={handleAdd} disabled={saving}>Add</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PartDetailDrawer({ partNumber, onClose, onRefresh, setToast }) {
+  const { data: part, loading, error, refresh } = useApi(`/parts/${partNumber}`);
+  const vendorsApi = useApi(part?.partId ? `/vendors/by-part/${part.partId}` : null);
+  const racksApi = useApi('/racks');
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (part && !editing) setForm({...part, rackNumber: part.storageRack?.rackNumber || ''});
+  }, [part, editing]);
+
+  if (loading || !part) return <DetailDrawer open title="Part Details" onClose={onClose}>{loading ? <div className="skeleton" style={{height: 100}} /> : <ErrorBox message={error} />}</DetailDrawer>;
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await apiFetch(`/parts/${partNumber}`, { method: 'PUT', body: JSON.stringify({...form, unitPrice: parseFloat(form.unitPrice), currentQuantity: parseInt(form.currentQuantity), thresholdValue: parseInt(form.thresholdValue)}) });
+      if (form.rackNumber && (!part.storageRack || form.rackNumber !== String(part.storageRack.rackNumber))) {
+        await apiFetch(`/parts/${partNumber}/rack/${form.rackNumber}`, { method: 'PUT' });
+      }
+      setToast({ msg: 'Part updated.', type: 'success' });
+      setEditing(false);
+      refresh();
+      onRefresh();
+    } catch(e) {
+      setToast({ msg: e.message, type: 'error' });
+    }
+    setSaving(false);
+  }
+
+  return (
+    <DetailDrawer open title={editing ? "Edit Part" : "Part Details"} onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {editing ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
+            <div><label style={{ fontSize: 12, fontWeight: 600 }}>Part Name</label><input value={form.partName} onChange={e=>setForm({...form, partName: e.target.value})} style={{ width: '100%', padding: 8, marginTop: 4, borderRadius: 6, border: '1px solid var(--slate-200)' }} /></div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div><label style={{ fontSize: 12, fontWeight: 600 }}>Price (₹)</label><input type="number" value={form.unitPrice} onChange={e=>setForm({...form, unitPrice: e.target.value})} style={{ width: '100%', padding: 8, marginTop: 4, borderRadius: 6, border: '1px solid var(--slate-200)' }} /></div>
+              <div><label style={{ fontSize: 12, fontWeight: 600 }}>Quantity</label><input type="number" value={form.currentQuantity} onChange={e=>setForm({...form, currentQuantity: e.target.value})} style={{ width: '100%', padding: 8, marginTop: 4, borderRadius: 6, border: '1px solid var(--slate-200)' }} /></div>
+              <div><label style={{ fontSize: 12, fontWeight: 600 }}>Threshold</label><input type="number" value={form.thresholdValue} onChange={e=>setForm({...form, thresholdValue: e.target.value})} style={{ width: '100%', padding: 8, marginTop: 4, borderRadius: 6, border: '1px solid var(--slate-200)' }} /></div>
+              <div><label style={{ fontSize: 12, fontWeight: 600 }}>Size</label>
+                <select value={form.sizeCategory} onChange={e=>setForm({...form, sizeCategory: e.target.value})} style={{ width: '100%', padding: 8, marginTop: 4, borderRadius: 6, border: '1px solid var(--slate-200)' }}>
+                  <option>SMALL</option><option>MEDIUM</option><option>LARGE</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600 }}>Storage Rack</label>
+              <select value={form.rackNumber} onChange={e=>setForm({...form, rackNumber: e.target.value})} style={{ width: '100%', padding: 8, marginTop: 4, borderRadius: 6, border: '1px solid var(--slate-200)' }}>
+                <option value="">Unassigned</option>
+                {(racksApi.data || []).map(r => <option key={r.rackNumber} value={r.rackNumber}>Rack #{r.rackNumber} ({r.wallLocation})</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <Btn variant="primary" onClick={handleSave} disabled={saving}>Save</Btn>
+              <Btn variant="secondary" onClick={() => setEditing(false)}>Cancel</Btn>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div>
+              <div style={{ fontSize: 24, fontWeight: 700 }}>{part.partName}</div>
+              <div style={{ fontFamily: 'DM Mono', color: 'var(--slate-500)', fontSize: 13, marginTop: 4 }}>{part.partNumber}</div>
+            </div>
+            <div style={{ background: '#F9FAFB', borderRadius: 8, padding: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div><div style={{ fontSize: 11, color: 'var(--slate-400)' }}>Quantity</div><div style={{ fontWeight: 600, fontSize: 15 }}>{part.currentQuantity} / {part.thresholdValue}</div></div>
+              <div><div style={{ fontSize: 11, color: 'var(--slate-400)' }}>Unit Price</div><div style={{ fontWeight: 600, fontSize: 15 }}>{fmt(part.unitPrice)}</div></div>
+              <div><div style={{ fontSize: 11, color: 'var(--slate-400)' }}>Size</div><div style={{ fontWeight: 600, fontSize: 13 }}>{part.sizeCategory}</div></div>
+              <div><div style={{ fontSize: 11, color: 'var(--slate-400)' }}>Rack Location</div><div style={{ fontWeight: 600, fontSize: 13 }}>{part.storageRack ? `Rack #${part.storageRack.rackNumber}` : 'Unassigned'}</div></div>
+            </div>
+            <Btn variant="secondary" onClick={() => setEditing(true)}>Edit Details</Btn>
+
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Vendors for this part</div>
+              {vendorsApi.loading ? <SkeletonRows cols={1} rows={2} /> : (vendorsApi.data || []).length === 0 ? <div style={{ fontSize: 12, color: 'var(--slate-500)' }}>No vendors assigned.</div> : (vendorsApi.data || []).map(v => (
+                <div key={v.vendorId} style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 6, padding: 12, marginBottom: 8 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{v.vendorName}</div>
+                  <div style={{ fontSize: 12, color: 'var(--slate-500)' }}>{v.email || v.contactNumber}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </DetailDrawer>
   );
 }
 
@@ -460,12 +692,48 @@ function AddPartModal({ onClose, onSubmit }) {
 
 // ── Vendors ────────────────────────────────────────────────────────────────
 function VendorsScreen() {
-  const { data, loading, error, refresh } = useApi('/vendors');
+  const [query, setQuery] = useState('');
+  const debouncedQuery = useDebounce(query, 300);
+  const apiPath = debouncedQuery.length >= 2 ? `/vendors/search?q=${encodeURIComponent(debouncedQuery)}` : '/vendors';
+  const { data, loading, error, refresh } = useApi(apiPath);
+  
+  const [showAdd, setShowAdd] = useState(false);
+  const [detailVendorId, setDetailVendorId] = useState(null);
+  const [deleteConf, setDeleteConf] = useState(null);
+  const [toast, setToast] = useState(null);
+
   const vendors = data || [];
+
+  async function handleAddVendor(formData) {
+    try {
+      await apiFetch('/vendors', { method: 'POST', body: JSON.stringify(formData) });
+      setToast({ msg: 'Vendor added.', type: 'success' });
+      setShowAdd(false);
+      refresh();
+    } catch(e) {
+      setToast({ msg: e.message, type: 'error' });
+    }
+  }
+
+  async function handleDeleteVendor() {
+    try {
+      await apiFetch(`/vendors/${deleteConf}`, { method: 'DELETE' });
+      setToast({ msg: 'Vendor deleted.', type: 'success' });
+      setDeleteConf(null);
+      refresh();
+    } catch(e) {
+      setToast({ msg: e.message, type: 'error' });
+    }
+  }
+
   return (
     <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-      <TopBar title="Vendors" subtitle={loading ? 'Loading…' : `${vendors.length} registered vendors`} actions={[<Btn key="add" variant="primary" icon="Plus">Add Vendor</Btn>]} />
+      <TopBar title="Vendors" subtitle={loading ? 'Loading…' : `${vendors.length} vendors`} actions={[<Btn key="add" variant="primary" icon="Plus" onClick={() => setShowAdd(true)}>Add Vendor</Btn>]} />
       <div style={{ padding: 24 }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+          <SearchInput value={query} onChange={e => setQuery(e.target.value)} placeholder="Search vendors…" />
+          <Btn variant="ghost" icon="RefreshCw" onClick={refresh}>Refresh</Btn>
+        </div>
         {error ? <ErrorBox message={error} onRetry={refresh} /> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
             {loading ? Array.from({ length: 6 }).map((_, i) => (
@@ -475,12 +743,13 @@ function VendorsScreen() {
                 <div className="skeleton" style={{ height: 9, width: '90%', marginBottom: 6 }} />
                 <div className="skeleton" style={{ height: 9, width: '60%' }} />
               </div>
-            )) : vendors.map(v => (
-              <div key={v.vendorId} style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: '18px 20px', boxShadow: 'var(--shadow-card)' }}>
+            )) : vendors.length === 0 ? <div style={{ gridColumn: '1 / -1', padding: 40, textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>No vendors found.</div> : vendors.map(v => (
+              <div key={v.vendorId} onClick={() => setDetailVendorId(v.vendorId)} style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: '18px 20px', boxShadow: 'var(--shadow-card)', cursor: 'pointer', transition: 'border-color 150ms' }} onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--amber)'} onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--slate-200)'}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                   <div style={{ width: 36, height: 36, background: 'var(--slate-100)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Icon name="Building2" size={16} color="var(--slate-500)" />
                   </div>
+                  <button onClick={e => { e.stopPropagation(); setDeleteConf(v.vendorId); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--slate-400)', padding: 4 }}><Icon name="Trash2" size={14} /></button>
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--slate-900)', marginBottom: 4 }}>{v.vendorName}</div>
                 <div style={{ fontSize: 12, color: 'var(--slate-400)', marginBottom: 10, lineHeight: 1.5 }}>{v.vendorAddress}</div>
@@ -493,18 +762,150 @@ function VendorsScreen() {
           </div>
         )}
       </div>
+      {showAdd && <AddVendorModal onClose={() => setShowAdd(false)} onSubmit={handleAddVendor} />}
+      {detailVendorId && <VendorDetailDrawer vendorId={detailVendorId} onClose={() => setDetailVendorId(null)} onRefresh={refresh} setToast={setToast} />}
+      <ConfirmDialog open={!!deleteConf} title="Delete Vendor" message={`Are you sure you want to delete this vendor? This action cannot be undone.`} onCancel={() => setDeleteConf(null)} onConfirm={handleDeleteVendor} />
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
+  );
+}
+
+function AddVendorModal({ onClose, onSubmit }) {
+  const [form, setForm] = useState({ vendorName: '', vendorAddress: '', contactNumber: '', email: '' });
+  const [saving, setSaving] = useState(false);
+  async function handleSubmit() { setSaving(true); await onSubmit(form); setSaving(false); }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: 28, width: 420, boxShadow: '0 20px 48px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h2 style={{ fontSize: 17, fontWeight: 700 }}>Add Vendor</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--slate-400)' }}><Icon name="X" size={18} /></button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div><label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4, display: 'block' }}>Vendor Name</label><input value={form.vendorName} onChange={e=>setForm({...form, vendorName: e.target.value})} style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 6, border: '1px solid var(--slate-200)', outline: 'none' }} /></div>
+          <div><label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4, display: 'block' }}>Address</label><input value={form.vendorAddress} onChange={e=>setForm({...form, vendorAddress: e.target.value})} style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 6, border: '1px solid var(--slate-200)', outline: 'none' }} /></div>
+          <div><label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4, display: 'block' }}>Contact Number</label><input value={form.contactNumber} onChange={e=>setForm({...form, contactNumber: e.target.value})} style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 6, border: '1px solid var(--slate-200)', outline: 'none', fontFamily: 'DM Mono' }} /></div>
+          <div><label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4, display: 'block' }}>Email</label><input value={form.email} onChange={e=>setForm({...form, email: e.target.value})} style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 6, border: '1px solid var(--slate-200)', outline: 'none' }} /></div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 22 }}>
+          <Btn variant="secondary" onClick={onClose}>Cancel</Btn>
+          <Btn variant="primary" onClick={handleSubmit} disabled={saving}>{saving ? 'Saving…' : 'Add Vendor'}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VendorDetailDrawer({ vendorId, onClose, onRefresh, setToast }) {
+  const { data: vendor, loading, error, refresh } = useApi(`/vendors/${vendorId}`);
+  const partsApi = useApi(`/vendors/${vendorId}/parts`);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (vendor && !editing) setForm(vendor);
+  }, [vendor, editing]);
+
+  if (loading || !vendor) return <DetailDrawer open title="Vendor Details" onClose={onClose}>{loading ? <div className="skeleton" style={{height: 100}} /> : <ErrorBox message={error} />}</DetailDrawer>;
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await apiFetch(`/vendors/${vendorId}`, { method: 'PUT', body: JSON.stringify(form) });
+      setToast({ msg: 'Vendor updated.', type: 'success' });
+      setEditing(false);
+      refresh();
+      onRefresh();
+    } catch(e) {
+      setToast({ msg: e.message, type: 'error' });
+    }
+    setSaving(false);
+  }
+
+  return (
+    <DetailDrawer open title={editing ? "Edit Vendor" : "Vendor Details"} onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {editing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4, display: 'block' }}>Vendor Name</label><input value={form.vendorName} onChange={e=>setForm({...form, vendorName: e.target.value})} style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--slate-200)' }} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4, display: 'block' }}>Address</label><input value={form.vendorAddress} onChange={e=>setForm({...form, vendorAddress: e.target.value})} style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--slate-200)' }} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4, display: 'block' }}>Contact Number</label><input value={form.contactNumber} onChange={e=>setForm({...form, contactNumber: e.target.value})} style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--slate-200)' }} /></div>
+            <div><label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-600)', marginBottom: 4, display: 'block' }}>Email</label><input value={form.email} onChange={e=>setForm({...form, email: e.target.value})} style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--slate-200)' }} /></div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <Btn variant="primary" onClick={handleSave} disabled={saving}>Save</Btn>
+              <Btn variant="secondary" onClick={() => setEditing(false)}>Cancel</Btn>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div>
+              <div style={{ fontSize: 24, fontWeight: 700 }}>{vendor.vendorName}</div>
+              <div style={{ color: 'var(--slate-500)', fontSize: 13, marginTop: 4 }}>{vendor.vendorAddress}</div>
+            </div>
+            <div style={{ background: '#F9FAFB', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Icon name="Phone" size={14} color="var(--slate-400)"/><span style={{ fontSize: 13, fontFamily: 'DM Mono' }}>{vendor.contactNumber || '—'}</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Icon name="Mail" size={14} color="var(--slate-400)"/><span style={{ fontSize: 13 }}>{vendor.email || '—'}</span></div>
+            </div>
+            <Btn variant="secondary" onClick={() => setEditing(true)}>Edit Details</Btn>
+
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Parts Supplied</div>
+              {partsApi.loading ? <SkeletonRows cols={2} rows={3} /> : (partsApi.data || []).length === 0 ? <div style={{ fontSize: 12, color: 'var(--slate-500)' }}>No parts supplied by this vendor.</div> : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr><TH>Part No.</TH><TH>Part Name</TH></tr></thead>
+                  <tbody>
+                    {(partsApi.data || []).map(p => (
+                      <tr key={p.partId}>
+                        <TD mono>{p.partNumber}</TD><TD>{p.partName}</TD>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </DetailDrawer>
   );
 }
 
 // ── Orders ─────────────────────────────────────────────────────────────────
 function OrdersScreen() {
-  const { data, loading, error, refresh } = useApi('/orders');
+  const [filterDate, setFilterDate] = useState('');
+  const apiPath = filterDate ? `/orders/search?date=${filterDate}` : '/orders';
+  const { data, loading, error, refresh } = useApi(apiPath);
+  
+  const [showGen, setShowGen] = useState(false);
+  const [detailOrderId, setDetailOrderId] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [generating, setGenerating] = useState(false);
+
   const orders = data || [];
+
+  async function handleGenerate() {
+    setGenerating(true);
+    try {
+      await apiFetch('/orders/generate', { method: 'POST' });
+      setToast({ msg: `Orders generated successfully.`, type: 'success' });
+      setShowGen(false);
+      refresh();
+    } catch(e) {
+      setToast({ msg: e.message, type: 'error' });
+    }
+    setGenerating(false);
+  }
+
   return (
     <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-      <TopBar title="Orders" subtitle={loading ? 'Loading…' : `${orders.length} orders`} actions={[<Btn key="new" variant="primary" icon="Plus">New Order</Btn>]} />
+      <TopBar title="Orders" subtitle={loading ? 'Loading…' : `${orders.length} orders`} actions={[<Btn key="new" variant="primary" icon="Play" onClick={() => setShowGen(true)}>Generate Orders</Btn>]} />
       <div style={{ padding: 24 }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+          <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={{ padding: '8px 12px', fontSize: 13, border: '1px solid var(--slate-200)', borderRadius: 6, outline: 'none', fontFamily: 'DM Sans', color: 'var(--slate-900)' }} />
+          {filterDate && <Btn variant="ghost" onClick={() => setFilterDate('')}>Clear</Btn>}
+          <Btn variant="ghost" icon="RefreshCw" onClick={refresh}>Refresh</Btn>
+        </div>
         {error ? <ErrorBox message={error} onRetry={refresh} /> : (
           <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -513,11 +914,11 @@ function OrdersScreen() {
                 {loading ? <SkeletonRows cols={6} rows={6} /> : orders.length === 0 ? (
                   <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>No orders found.</td></tr>
                 ) : orders.map(o => (
-                  <tr key={o.orderId} onMouseEnter={e => e.currentTarget.style.background = '#FFFBEB'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                  <tr key={o.orderId} onClick={() => setDetailOrderId(o.orderId)} style={{ cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBEB'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                     <TD mono style={{ fontWeight: 500 }}>#{o.orderId}</TD>
                     <TD style={{ color: 'var(--slate-500)' }}>{o.orderDate}</TD>
                     <TD style={{ fontWeight: 500, color: 'var(--slate-900)' }}>{o.vendor?.vendorName || o.vendorName || '—'}</TD>
-                    <TD mono>{o.totalItems ?? o.items ?? '—'}</TD>
+                    <TD mono>{o.totalItems ?? o.items?.length ?? '—'}</TD>
                     <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--slate-50)' }}>
                       <span style={{ fontSize: 12, color: o.printed ? '#059669' : 'var(--slate-400)' }}>{o.printed ? 'Yes' : 'No'}</span>
                     </td>
@@ -531,17 +932,76 @@ function OrdersScreen() {
           </div>
         )}
       </div>
+      <ConfirmDialog open={showGen} title="Generate Orders" message="Generate orders for all parts currently below their JIT threshold?" onCancel={() => setShowGen(false)} onConfirm={handleGenerate} confirmText="Generate" loading={generating} />
+      {detailOrderId && <OrderDetailDrawer orderId={detailOrderId} onClose={() => setDetailOrderId(null)} setToast={setToast} />}
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
+  );
+}
+
+function OrderDetailDrawer({ orderId, onClose, setToast }) {
+  const { data: order, loading, error } = useApi(`/orders/${orderId}`);
+
+  async function handlePrint() {
+    try {
+      const res = await fetch(`${API}/orders/${orderId}/print`);
+      const text = await res.text();
+      const w = window.open('', '_blank');
+      if (w) {
+        w.document.write(`<pre style="font-family: monospace; padding: 20px;">${text}</pre>`);
+        w.document.close();
+      }
+    } catch(e) {
+      setToast({ msg: 'Print failed.', type: 'error' });
+    }
+  }
+
+  if (loading || !order) return <DetailDrawer open title="Order Details" onClose={onClose}>{loading ? <div className="skeleton" style={{height: 100}} /> : <ErrorBox message={error} />}</DetailDrawer>;
+
+  return (
+    <DetailDrawer open title={`Order #${order.orderId}`} onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{order.vendor?.vendorName || order.vendorName || 'Vendor'}</div>
+            <div style={{ fontSize: 13, color: 'var(--slate-500)' }}>{order.orderDate}</div>
+          </div>
+          <OrderBadge status={order.status || (order.printed ? 'Received' : 'Pending')} />
+        </div>
+        <div style={{ background: '#F9FAFB', borderRadius: 8, padding: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div><div style={{ fontSize: 11, color: 'var(--slate-400)' }}>Total Items</div><div style={{ fontWeight: 600, fontSize: 13 }}>{order.totalItems || order.items?.length || 0}</div></div>
+          <div><div style={{ fontSize: 11, color: 'var(--slate-400)' }}>Printed</div><div style={{ fontWeight: 600, fontSize: 13 }}>{order.printed ? 'Yes' : 'No'}</div></div>
+        </div>
+        <Btn variant="primary" icon="Printer" onClick={handlePrint}>Print Order</Btn>
+        
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Items</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><TH>Part No.</TH><TH>Name</TH><TH>Qty</TH></tr></thead>
+            <tbody>
+              {(!order.items || order.items.length === 0) ? <tr><td colSpan={3} style={{ padding: 16, textAlign: 'center', fontSize: 12, color: 'var(--slate-400)' }}>No items.</td></tr> : order.items.map((it, i) => (
+                <tr key={it.id || i}>
+                  <TD mono>{it.partNumber || it.part?.partNumber}</TD>
+                  <TD>{it.partName || it.part?.partName}</TD>
+                  <TD mono>{it.requiredQuantity || it.quantity}</TD>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </DetailDrawer>
   );
 }
 
 // ── Sales ──────────────────────────────────────────────────────────────────
 function SalesScreen() {
   const { data, loading, error, refresh } = useApi('/sales/transactions');
+  const stats = useApi('/sales/stats');
   const [showRecord, setShowRecord] = useState(false);
   const [toast, setToast] = useState(null);
   const sales = data || [];
-  const total = sales.reduce((a, s) => a + (s.revenueAmount || 0), 0);
+  const statData = stats.data || {};
 
   async function handleRecordSale(formData) {
     try {
@@ -549,6 +1009,7 @@ function SalesScreen() {
       setToast({ msg: 'Sale recorded.', type: 'success' });
       setShowRecord(false);
       refresh();
+      stats.refresh();
     } catch (e) {
       setToast({ msg: e.message, type: 'error' });
     }
@@ -556,8 +1017,25 @@ function SalesScreen() {
 
   return (
     <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-      <TopBar title="Sales" subtitle={loading ? 'Loading…' : `${sales.length} transactions · ${fmt(total)}`} actions={[<Btn key="rec" variant="primary" icon="Plus" onClick={() => setShowRecord(true)}>Record Sale</Btn>]} />
+      <TopBar title="Sales" subtitle={loading ? 'Loading…' : `${sales.length} transactions`} actions={[<Btn key="rec" variant="primary" icon="Plus" onClick={() => setShowRecord(true)}>Record Sale</Btn>]} />
       <div style={{ padding: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, marginBottom: 24 }}>
+          <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: '16px 20px', boxShadow: 'var(--shadow-card)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--slate-400)' }}>Today's Revenue</div>
+              <div style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="IndianRupee" size={14} color="#059669" /></div>
+            </div>
+            <div style={{ fontFamily: 'DM Mono', fontSize: 26, fontWeight: 700, color: 'var(--slate-900)' }}>{stats.loading ? '…' : fmt(statData.totalRevenue || 0)}</div>
+          </div>
+          <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: '16px 20px', boxShadow: 'var(--shadow-card)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--slate-400)' }}>Transaction Count</div>
+              <div style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="ShoppingCart" size={14} color="var(--navy-500)" /></div>
+            </div>
+            <div style={{ fontFamily: 'DM Mono', fontSize: 26, fontWeight: 700, color: 'var(--slate-900)' }}>{stats.loading ? '…' : (statData.transactionCount || 0)}</div>
+          </div>
+        </div>
+
         {error ? <ErrorBox message={error} onRetry={refresh} /> : (
           <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -619,10 +1097,15 @@ function RecordSaleModal({ onClose, onSubmit }) {
 
 // ── Reports ────────────────────────────────────────────────────────────────
 function ReportsScreen() {
-  const [dailyKey, setDailyKey] = React.useState(0);
-  const [dailyState, setDailyState] = React.useState({ data: null, loading: true, error: null });
+  const [monthlyKey, setMonthlyKey] = React.useState(0);
+  const [monthlyState, setMonthlyState] = React.useState({ data: null, loading: true, error: null });
+
+  const [dateStr, setDateStr] = useState(new Date().toISOString().split('T')[0]);
+  const [dailyRefreshKey, setDailyRefreshKey] = useState(0);
+  const dailyApi = useApi(`/reports/daily/${dateStr}`, [dateStr, dailyRefreshKey]);
+
   React.useEffect(() => {
-    setDailyState({ data: null, loading: true, error: null });
+    setMonthlyState({ data: null, loading: true, error: null });
     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const now = new Date();
     const targets = Array.from({ length: 6 }, (_, i) => {
@@ -633,19 +1116,21 @@ function ReportsScreen() {
       apiFetch(`/reports/monthly/${year}/${month}`)
         .then(d => ({ ...d, label }))
         .catch(() => ({ totalRevenue: 0, label }))
-    )).then(results => setDailyState({ data: results, loading: false, error: null }))
-      .catch(e => setDailyState({ data: null, loading: false, error: e.message }));
-  }, [dailyKey]);
-  const daily = { ...dailyState, refresh: () => setDailyKey(k => k + 1) };
+    )).then(results => setMonthlyState({ data: results, loading: false, error: null }))
+      .catch(e => setMonthlyState({ data: null, loading: false, error: e.message }));
+  }, [monthlyKey]);
+
+  const monthly = { ...monthlyState, refresh: () => setMonthlyKey(k => k + 1) };
   const jit     = useApi('/jit/thresholds');
+  const [toast, setToast] = useState(null);
 
   const parts   = jit.data || [];
   const within  = parts.filter(p => stockStatus(p) === 'ok').length;
   const near    = parts.filter(p => stockStatus(p) === 'low').length;
   const below   = parts.filter(p => stockStatus(p) === 'critical').length;
 
-  // Build chart from daily revenue data
-  const months = daily.data || [];
+  // Build chart from monthly revenue data
+  const months = monthly.data || [];
   const barData = months.length > 0 ? months.slice(-6) : [
     { label: 'Nov', value: 210000 }, { label: 'Dec', value: 285000 },
     { label: 'Jan', value: 198000 }, { label: 'Feb', value: 243000 },
@@ -653,61 +1138,161 @@ function ReportsScreen() {
   ];
   const maxVal = Math.max(...barData.map(m => m.totalRevenue || m.value || 1));
 
+  async function handleMonthlyRefreshBackend() {
+    try {
+      const now = new Date();
+      await apiFetch(`/reports/monthly/${now.getFullYear()}/${now.getMonth()+1}/refresh`);
+      monthly.refresh();
+      setToast({ msg: 'Monthly report refreshed.', type: 'success' });
+    } catch(e) {
+      setToast({ msg: e.message, type: 'error' });
+    }
+  }
+
+  async function handleDailyRefreshBackend() {
+    try {
+      await apiFetch(`/reports/daily/${dateStr}/refresh`);
+      setDailyRefreshKey(k => k+1);
+      setToast({ msg: 'Daily report refreshed.', type: 'success' });
+    } catch(e) {
+      setToast({ msg: e.message, type: 'error' });
+    }
+  }
+
+  const d = dailyApi.data || {};
+  const hourly = d.hourlyDataPoints || [];
+  const maxHourly = Math.max(...hourly.map(h => h.revenue || 1));
+
   return (
     <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-      <TopBar title="Reports" subtitle="Revenue analytics & JIT summaries" actions={[<Btn key="gen" variant="secondary" icon="RefreshCw" onClick={() => { daily.refresh(); jit.refresh(); }}>Refresh</Btn>]} />
-      <div style={{ padding: 24, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
-        {/* Chart */}
-        <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: 24, boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Revenue Trend</div>
-          <div style={{ fontSize: 12, color: 'var(--slate-400)', marginBottom: 20 }}>
-            {daily.loading ? 'Loading from API…' : daily.error ? 'Using sample data (API unavailable)' : 'Live from /api/reports/monthly/{year}/{month}'}
+      <TopBar title="Reports" subtitle="Revenue analytics & JIT summaries" actions={[<Btn key="gen" variant="secondary" icon="RefreshCw" onClick={() => { monthly.refresh(); jit.refresh(); dailyApi.refresh(); }}>Refresh All</Btn>]} />
+      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
+        
+        {/* Daily Report */}
+        <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, boxShadow: 'var(--shadow-card)', padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Daily Operations Report</div>
+              <div style={{ fontSize: 13, color: 'var(--slate-500)' }}>Performance metrics for selected date</div>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <input type="date" value={dateStr} onChange={e => setDateStr(e.target.value)} style={{ padding: '7px 12px', fontSize: 13, border: '1px solid var(--slate-200)', borderRadius: 6, outline: 'none', fontFamily: 'DM Sans' }} />
+              <Btn variant="secondary" icon="RefreshCw" onClick={handleDailyRefreshBackend}>Refresh Daily</Btn>
+            </div>
           </div>
-          {daily.error && <div style={{ fontSize: 12, color: '#B45309', background: '#FFFBEB', padding: '8px 12px', borderRadius: 6, marginBottom: 16 }}>{daily.error}</div>}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 140 }}>
-            {barData.map((m, i) => {
-              const val = m.totalRevenue || m.value || 0;
-              const label = m.label || m.reportDate || m.month || '';
-              return (
-                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                  <div style={{ fontFamily: 'DM Mono', fontSize: 10, color: 'var(--slate-400)' }}>{val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}</div>
-                  <div style={{ width: '100%', borderRadius: '4px 4px 0 0', background: i === barData.length - 1 ? 'var(--amber)' : 'var(--slate-200)', height: `${Math.round((val / maxVal) * 110)}px`, transition: 'height 400ms ease' }} />
-                  <div style={{ fontSize: 11, color: 'var(--slate-400)', fontWeight: 500 }}>{String(label).slice(0, 3)}</div>
+          {dailyApi.loading ? <SkeletonRows cols={3} rows={2} /> : dailyApi.error ? <ErrorBox message={dailyApi.error} onRetry={dailyApi.refresh} /> : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+              {/* Daily Stats */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ background: '#F9FAFB', padding: 14, borderRadius: 6 }}>
+                  <div style={{ fontSize: 11, color: 'var(--slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total Revenue</div>
+                  <div style={{ fontFamily: 'DM Mono', fontSize: 22, fontWeight: 700, color: '#059669' }}>{fmt(d.totalRevenue)}</div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* JIT */}
-        <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: 20, boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>JIT Threshold Status</div>
-          <div style={{ fontSize: 12, color: 'var(--slate-400)', marginBottom: 16 }}>Based on 7-day sales velocity</div>
-          {jit.loading ? <SkeletonRows cols={2} rows={3} /> : jit.error ? <ErrorBox message={jit.error} onRetry={jit.refresh} /> : (
-            <>
-              {[
-                { label: 'Within threshold', count: within, color: '#059669', bg: '#F0FDF4' },
-                { label: 'Near threshold',   count: near,   color: '#B45309', bg: '#FFFBEB' },
-                { label: 'Below threshold',  count: below,  color: '#DC2626', bg: '#FFF1F2' },
-              ].map(r => (
-                <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--slate-50)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: r.color }} />
-                    <span style={{ fontSize: 13, color: 'var(--slate-700)' }}>{r.label}</span>
+                <div style={{ background: '#F9FAFB', padding: 14, borderRadius: 6, display: 'flex', gap: 16 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: 'var(--slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Transactions</div>
+                    <div style={{ fontFamily: 'DM Mono', fontSize: 18, fontWeight: 700 }}>{d.transactionCount || 0}</div>
                   </div>
-                  <span style={{ background: r.bg, color: r.color, fontFamily: 'DM Mono', fontSize: 12, fontWeight: 700, padding: '2px 10px', borderRadius: 4 }}>{r.count}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: 'var(--slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Avg Sale</div>
+                    <div style={{ fontFamily: 'DM Mono', fontSize: 18, fontWeight: 700 }}>{fmt(d.averageTransactionValue)}</div>
+                  </div>
                 </div>
-              ))}
-              <div style={{ marginTop: 16 }}>
-                <Btn variant="secondary" style={{ width: '100%', justifyContent: 'center' }} icon="Activity" onClick={async () => {
-                  try { await apiFetch('/jit/calculate', { method: 'POST' }); jit.refresh(); }
-                  catch (e) { alert(e.message); }
-                }}>Recalculate JIT</Btn>
               </div>
-            </>
+
+              {/* Hourly Chart */}
+              <div style={{ background: '#F9FAFB', padding: 14, borderRadius: 6 }}>
+                <div style={{ fontSize: 11, color: 'var(--slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Hourly Revenue</div>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 100 }}>
+                  {hourly.length === 0 ? <div style={{ fontSize: 12, color: 'var(--slate-400)', width: '100%', textAlign: 'center', alignSelf: 'center' }}>No hourly data</div> : hourly.map((h, i) => (
+                    <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                      <div style={{ width: '100%', background: 'var(--amber)', borderRadius: '2px 2px 0 0', height: `${Math.round((h.revenue / maxHourly) * 80)}px` }} />
+                      <div style={{ fontSize: 9, color: 'var(--slate-400)' }}>{h.hour}:00</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Top Selling Parts */}
+              <div style={{ background: '#F9FAFB', padding: 14, borderRadius: 6, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontSize: 11, color: 'var(--slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Top Selling Parts</div>
+                <div style={{ flex: 1, overflow: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <tbody>
+                      {(!d.topSellingParts || d.topSellingParts.length === 0) ? <tr><td style={{ color: 'var(--slate-400)', padding: 8 }}>No sales data.</td></tr> : d.topSellingParts.slice(0, 3).map((p, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--slate-100)' }}>
+                          <td style={{ padding: '6px 0', fontFamily: 'DM Mono' }}>{p.partNumber}</td>
+                          <td style={{ padding: '6px 0', textAlign: 'center' }}>{p.quantitySold} units</td>
+                          <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 600, color: '#059669' }}>{fmt(p.revenue)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           )}
         </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+          {/* Monthly Chart */}
+          <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: 24, boxShadow: 'var(--shadow-card)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Revenue Trend</div>
+                <div style={{ fontSize: 12, color: 'var(--slate-400)' }}>
+                  {monthly.loading ? 'Loading from API…' : monthly.error ? 'Using sample data (API unavailable)' : 'Live from /api/reports/monthly'}
+                </div>
+              </div>
+              <button onClick={handleMonthlyRefreshBackend} disabled={monthly.loading} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--slate-100)', border: 'none', padding: '6px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: 'var(--slate-700)' }}><Icon name="RefreshCw" size={12} /> Sync</button>
+            </div>
+            {monthly.error && <div style={{ fontSize: 12, color: '#B45309', background: '#FFFBEB', padding: '8px 12px', borderRadius: 6, marginBottom: 16 }}>{monthly.error}</div>}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 140 }}>
+              {barData.map((m, i) => {
+                const val = m.totalRevenue || m.value || 0;
+                const label = m.label || m.reportDate || m.month || '';
+                return (
+                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <div style={{ fontFamily: 'DM Mono', fontSize: 10, color: 'var(--slate-400)' }}>{val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}</div>
+                    <div style={{ width: '100%', borderRadius: '4px 4px 0 0', background: i === barData.length - 1 ? 'var(--amber)' : 'var(--slate-200)', height: `${Math.round((val / maxVal) * 110)}px`, transition: 'height 400ms ease' }} />
+                    <div style={{ fontSize: 11, color: 'var(--slate-400)', fontWeight: 500 }}>{String(label).slice(0, 3)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* JIT */}
+          <div style={{ background: '#fff', border: '1px solid var(--slate-200)', borderRadius: 8, padding: 20, boxShadow: 'var(--shadow-card)' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>JIT Threshold Status</div>
+            <div style={{ fontSize: 12, color: 'var(--slate-400)', marginBottom: 16 }}>Based on 7-day sales velocity</div>
+            {jit.loading ? <SkeletonRows cols={2} rows={3} /> : jit.error ? <ErrorBox message={jit.error} onRetry={jit.refresh} /> : (
+              <>
+                {[
+                  { label: 'Within threshold', count: within, color: '#059669', bg: '#F0FDF4' },
+                  { label: 'Near threshold',   count: near,   color: '#B45309', bg: '#FFFBEB' },
+                  { label: 'Below threshold',  count: below,  color: '#DC2626', bg: '#FFF1F2' },
+                ].map(r => (
+                  <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--slate-50)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: r.color }} />
+                      <span style={{ fontSize: 13, color: 'var(--slate-700)' }}>{r.label}</span>
+                    </div>
+                    <span style={{ background: r.bg, color: r.color, fontFamily: 'DM Mono', fontSize: 12, fontWeight: 700, padding: '2px 10px', borderRadius: 4 }}>{r.count}</span>
+                  </div>
+                ))}
+                <div style={{ marginTop: 16 }}>
+                  <Btn variant="secondary" style={{ width: '100%', justifyContent: 'center' }} icon="Activity" onClick={async () => {
+                    try { await apiFetch('/jit/calculate', { method: 'POST' }); jit.refresh(); }
+                    catch (e) { alert(e.message); }
+                  }}>Recalculate JIT</Btn>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
 }
