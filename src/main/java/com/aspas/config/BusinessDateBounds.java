@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Date;
 
@@ -51,6 +52,6 @@ public class BusinessDateBounds {
         if (localDateTime == null) {
             return null;
         }
-        return Date.from(localDateTime.atZone(zoneId()).toInstant());
+        return Date.from(localDateTime.toInstant(ZoneOffset.UTC));
     }
 }

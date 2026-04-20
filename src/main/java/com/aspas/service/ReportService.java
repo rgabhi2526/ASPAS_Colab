@@ -255,12 +255,15 @@ public class ReportService {
 
         List<HourlyDataPointDTO> hourly = buildHourlyFromTransactions(txs);
 
+        double avgTx = txCount > 0 ? totalRev / txCount : 0.0;
+
         return ReportResponseDTO.builder()
             .reportId(doc.getReportId())
             .reportType("DAILY")
             .reportDate(doc.getReportDate())
             .totalRevenue(totalRev)
             .transactionCount(txCount)
+            .averageTransactionValue(avgTx)
             .topSellingParts(tops)
             .hourlyDataPoints(hourly)
             .generatedAt(doc.getGeneratedAt())

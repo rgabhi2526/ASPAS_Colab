@@ -33,6 +33,7 @@ public class ReportResponseDTO {
 
     private Double totalRevenue;
     private Integer transactionCount;
+    private Double averageTransactionValue;
     private Double averageDailyRevenue;
 
     // Populated for daily reports (from cached DailyRevenueReportDoc)
